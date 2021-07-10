@@ -36,20 +36,23 @@ namespace {
 
 		VirtualStream(): stream_(nullptr), preallocated_(false) { }
 
-		VirtualStream(stream_t& ref): stream_(&ref), preallocated_(true) { }
+		VirtualStream(stream_t& ref): stream_(&ref), preallocated_(false) { }
 
-		VirtualStream(const std::string& path): preallocated_(true) {
-			if constexpr(isInputStream) { stream_ = &std::cin; }
-			else { stream_ = &std::cout; }
+		VirtualStream(const std::string& path) {
 			if(path != "-") {
-				stream_ = new file_stream_t(path, std::ios_base::binary);
 				preallocated_ = false;
+				stream_ = new file_stream_t(path, std::ios_base::binary);
+			} else {
+				preallocated_ = true;
+				if constexpr(isInputStream) { stream_ = &std::cin; }
+				else if constexpr(isOutputStream) { stream_ = &std::cout; }
+				else { assert(false && "this assertion shouldn't ever be reachable"); }
 			}
 		}
 
 		~VirtualStream() {
 			if(stream_ != nullptr) {
-				if(preallocated_)  delete stream_;
+				if(! preallocated_)  delete stream_;
 				stream_ = nullptr;
 			}
 		}
@@ -93,7 +96,7 @@ namespace {
 	}
 
 	template<typename uint_t>
-	uint_t random(Rng rng) {
+	uint_t random(Rng& rng) {
 		static_assert(std::numeric_limits<uint_t>::is_integer);
 		static_assert(! std::numeric_limits<uint_t>::is_signed);
 		return rng();

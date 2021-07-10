@@ -17,7 +17,17 @@ namespace {
 			std::vector<std::string>& rngKeysDynV,
 			xorinator::cli::OptionBits::IntType& options
 	) {
-		if(! (argvxx[cursor].empty() || (argvxx[cursor].front() != '-'))) {
+		static constexpr auto checkOptPrefix = [](const std::string_view& str) {
+			return
+				(str.front() == '-') && (
+					(
+						(str.size() > 2) && (str[1] == '-')
+					) || (
+						str.size() > 1
+					)
+				);
+		};
+		if((! argvxx[cursor].empty()) && checkOptPrefix(argvxx[cursor])) {
 			if(argvxx[cursor] == "-k"sv || argvxx[cursor] == "--key"sv) {
 				if(argvxx.size() > static_cast<unsigned>(cursor) + 1) {
 					++cursor;
@@ -28,6 +38,9 @@ namespace {
 			} else
 			if(argvxx[cursor] == "-q"sv || argvxx[cursor] == "--quiet"sv) {
 				options |= xorinator::cli::OptionBits::eQuiet;
+			} else {
+				throw std::runtime_error(
+					"invalid option \""s + std::string(argvxx[cursor]) + "\""s);
 			}
 			return true;
 		} else {
