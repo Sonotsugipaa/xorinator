@@ -88,6 +88,7 @@ namespace {
 
 
 	using Rng = std::mt19937;
+	using RngKey = xorinator::RngKey<512>;
 
 	Rng mk_rng() {
 		static auto rndDev = std::random_device();
@@ -103,12 +104,42 @@ namespace {
 	}
 
 
+	RngKey keyFromGenerator(const std::string& gen) {
+		Rng rng = Rng(gen.size());
+		std::array<RngKey::word_t, RngKey::word_count> hashedGen;
+		RngKey::word_t xorSum = 0;
+		for(char c : gen) { xorSum = xorSum ^ c; }
+		for(RngKey::word_t& word : hashedGen) {
+			word = rng() ^ xorSum; }
+		return RngKey(hashedGen);
+	}
+
+
 	bool runMux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
 		auto muxIn = VirtualInputStream(cmdln.firstArg);
 		auto muxOut = StaticVector<VirtualOutputStream>(cmdln.variadicArgs.size());
 		auto outputBuffer = StaticVector<byte_t>(muxOut.size());
+		auto rngKeys = StaticVector<RngKey>(cmdln.rngKeys.size());
+		auto rngKeyViews = StaticVector<RngKey::View>(rngKeys.size());
+		auto rngKeyIterators = StaticVector<RngKey::View::Iterator>(rngKeyViews.size());
 		auto rng = mk_rng();
+
+		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
+			rngKeys[i] = keyFromGenerator(key);
+			rngKeyViews[i] = rngKeys[i].view(0);
+			/* The next line is a bit of a hack: an iterator has no copy
+			 * assignment operator, but it needs to be initialized somehow;
+			 * unfortunately, the StaticVector initializes its content in the
+			 * first place through the default constructor.
+			 * Technically, placement new initialization is illegal here,
+			 * but the default constructor for Iterator zero-initializes
+			 * its members. The only dubious case is "generators_", a
+			 * unique_ptr, but initializing it with nullptr should make it
+			 * "overridable". */
+			new (&rngKeyIterators[i]) RngKey::View::Iterator(rngKeyViews[i].begin());
+			++i;
+		}
 
 		muxIn.get().exceptions(std::ios_base::badbit);
 		for(unsigned i=0; const std::string& path : cmdln.variadicArgs) {
@@ -123,6 +154,10 @@ namespace {
 			for(size_t i=1; i < muxOut.size(); ++i) {
 				outputBuffer[i] = random<byte_t>(rng);
 				xorSum = xorSum ^ outputBuffer[i];
+			}
+			for(auto& keyIter : rngKeyIterators) {
+				xorSum = xorSum ^ *keyIter;
+				++keyIter;
 			}
 			outputBuffer[0] = byte_t(inputChar) ^ xorSum;
 			for(size_t i=0; auto& output : muxOut) {
@@ -139,7 +174,18 @@ namespace {
 		using xorinator::byte_t;
 		auto demuxOut = VirtualOutputStream(cmdln.firstArg);
 		auto demuxIn = StaticVector<VirtualInputStream>(cmdln.variadicArgs.size());
-		decltype(demuxIn)::SizeType openInputs = demuxIn.size();
+		auto rngKeys = StaticVector<RngKey>(cmdln.rngKeys.size());
+		auto rngKeyViews = StaticVector<RngKey::View>(rngKeys.size());
+		auto rngKeyIterators = StaticVector<RngKey::View::Iterator>(rngKeyViews.size());
+
+		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
+			rngKeys[i] = keyFromGenerator(key);
+			rngKeyViews[i] = rngKeys[i].view(0);
+			/* The next line is a bit of a hack: see the similar situation in
+			 * ::runMux. */
+			new (&rngKeyIterators[i]) RngKey::View::Iterator(rngKeyViews[i].begin());
+			++i;
+		}
 
 		demuxOut.get().exceptions(std::ios_base::badbit);
 		for(unsigned i=0; const std::string& path : cmdln.variadicArgs) {
@@ -149,7 +195,8 @@ namespace {
 		}
 
 		char inputChar;
-		while(openInputs > 0) {
+		decltype(demuxIn)::SizeType openInputs = demuxIn.size();
+		while(true /* openInputs > 0 */) {
 			openInputs = 0;
 			byte_t xorSum = 0;
 			for(auto& input : demuxIn) {
@@ -158,7 +205,15 @@ namespace {
 					++openInputs;
 				}
 			}
-			demuxOut.get().put(xorSum);
+			if(openInputs > 0) {
+				for(auto& keyIter : rngKeyIterators) {
+					xorSum = xorSum ^ *keyIter;
+					++keyIter;
+				}
+				demuxOut.get().put(xorSum);
+			} else {
+				break;
+			}
 		}
 		demuxOut.get().flush();
 
@@ -186,9 +241,9 @@ namespace {
 			('"' + cmdln.zeroArg + '"') :
 			(cmdln.zeroArg);
 		std::cerr << "Usage:\n"
-			<< '\t' << zeroArg << " multiplex [--] FILE_IN FILE_OUT [FILE_OUT...]\n"
-			<< '\t' << zeroArg << " demultiplex [--] FILE_OUT FILE_IN [FILE_IN...]\n"
-			<< '\t' << zeroArg << " help | ?\n"
+			<< "   " << zeroArg << " multiplex [-k | --key PASSPHRASE] [--] FILE_IN FILE_OUT [FILE_OUT...]\n"
+			<< "   " << zeroArg << " demultiplex [-k | --key PASSPHRASE] [--] FILE_OUT FILE_IN [FILE_IN...]\n"
+			<< "   " << zeroArg << " help | ?\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
 			<< "Aliases for \"demultiplex\": demux, dmx, d\n" << std::endl;

@@ -127,7 +127,7 @@ namespace xorinator {
 
 		std::array<word_t, word_count> words;
 
-		inline RngKey(const decltype(words)& init = { }):
+		inline explicit RngKey(const decltype(words)& init = { }):
 				words(init)
 		{ }
 
@@ -154,13 +154,13 @@ namespace xorinator {
 			size_t beg_;
 			size_t end_;
 
-			inline View(): words_(nullptr), beg_(0), end_(0) { }
-
 			inline View(const decltype(RngKey::words)& words, size_t begin, size_t end):
 					words_(&words), beg_(begin), end_(end)
 			{ }
 
 		public:
+			inline View(): words_(nullptr), beg_(0), end_(0) { }
+
 			class Iterator {
 			private:
 				using RndEnginePtr = std::unique_ptr<RndEngine>;
@@ -205,7 +205,6 @@ namespace xorinator {
 				}
 
 				inline byte_t operator*() const {
-					static_assert(0xFF == ((1 << std::numeric_limits<uint8_t>::digits) - 1));
 					return
 						(current_gen_ >> (current_gen_rsh_ * std::numeric_limits<byte_t>::digits))
 						& ((1 << std::numeric_limits<byte_t>::digits) - 1);
@@ -224,6 +223,11 @@ namespace xorinator {
 
 		inline const View view(size_t begin, size_t end) const {
 			return View(words, begin, end); }
+
+		/** Constructs a RngKey view with size 0: it can be used
+		 * when the key has an unknown length. */
+		inline const View view(size_t begin) const {
+			return View(words, begin, begin); }
 	};
 
 }
