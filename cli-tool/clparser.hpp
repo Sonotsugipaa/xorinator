@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <exception>
+#include <stdexcept>
 #include <initializer_list>
 
 
