@@ -105,13 +105,16 @@ namespace {
 
 
 	RngKey keyFromGenerator(const std::string& gen) {
-		Rng rng = Rng(gen.size());
-		std::array<RngKey::word_t, RngKey::word_count> hashedGen;
-		RngKey::word_t xorSum = 0;
-		for(char c : gen) { xorSum = xorSum ^ c; }
-		for(RngKey::word_t& word : hashedGen) {
-			word = rng() ^ xorSum; }
-		return RngKey(hashedGen);
+		RngKey::word_t hash = 0;
+		std::array<RngKey::word_t, RngKey::word_count> key;
+		for(std::string::size_type i=0; i < gen.size(); ++i) {
+			hash = hash ^ std::minstd_rand(gen[i] ^ i)();
+		}
+		Rng rng = Rng(hash);
+		for(RngKey::word_t& word : key) {
+			word = rng();
+		}
+		return RngKey(key);
 	}
 
 
