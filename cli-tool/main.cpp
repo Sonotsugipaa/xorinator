@@ -280,9 +280,13 @@ namespace {
 			('"' + cmdln.zeroArg + '"') :
 			(cmdln.zeroArg);
 		std::cerr << "Usage:\n"
-			<< "   " << zeroArg << " multiplex [-k | --key PASSPHRASE] [--] FILE_IN FILE_OUT [FILE_OUT...]\n"
-			<< "   " << zeroArg << " demultiplex [-k | --key PASSPHRASE] [--] FILE_OUT FILE_IN [FILE_IN...]\n"
+			<< "   " << zeroArg << " multiplex [OPTIONS] [--] FILE_IN FILE_OUT [FILE_OUT...]\n"
+			<< "   " << zeroArg << " demultiplex [OPTIONS] [--] FILE_OUT FILE_IN [FILE_IN...]\n"
 			<< "   " << zeroArg << " help | ?\n"
+			<< '\n'
+			<< "Options:\n"
+			<< "   -k PASSPHRASE | --key PASSPHRASE\n"
+			<< "   -q | --quiet\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
 			<< "Aliases for \"demultiplex\": demux, dmx, d\n" << std::endl;
