@@ -49,6 +49,9 @@ Notably, using "`-`" as a file name will read or write to the standard input/out
 # Symmetric key encription and decryption (suboptimal):
 # the file "secret.txt" is encrypted to "secret.xor",
 # then it is decrypted and printed onto the terminal.
+# BEWARE - doing this defeats the purpose of Xorinator:
+# the "--key" option generates a cryptographically weak hash
+# from which to pseudorandomly generate a one-time pad.
 xor mux --key hunter2 secret.txt secret.xor
 xor dmx --key hunter2 - secret.xor
 
