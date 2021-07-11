@@ -87,13 +87,13 @@ namespace {
 
 
 	auto mk_test_cmdln(
-			const DynArgv& argv, CmdType cmdType,
+			const DynArgv& argv, std::string zeroArg, CmdType cmdType,
 			std::vector<std::string> rngKeys,
 			std::string firstKeyFile, std::vector<std::string> keyFiles,
 			xorinator::cli::OptionBits::IntType opts
 	) {
 		return [
-			&argv, cmdType, rngKeys, firstKeyFile, keyFiles, opts
+			&argv, zeroArg, cmdType, rngKeys, firstKeyFile, keyFiles, opts
 		] (std::ostream& os) {
 			try {
 				auto cmdln = xorinator::cli::CommandLine(argv.argc, argv.argv.data());
@@ -103,12 +103,14 @@ namespace {
 				cmdLnRngKeysDynV.insert(cmdLnRngKeysDynV.begin(), cmdln.rngKeys.begin(), cmdln.rngKeys.end());
 				cmdLnVarargsDynV.insert(cmdLnVarargsDynV.begin(), cmdln.variadicArgs.begin(), cmdln.variadicArgs.end());
 				bool success = true;
-				#define CHECK_(COND_, MSG_) if(! (COND_)) { os << MSG_ << " mismatch\n"; success = false; }
-					CHECK_(cmdType == cmdln.cmdType,        "command type");
-					CHECK_(opts == cmdln.options,           "options");
-					CHECK_(rngKeys == cmdLnRngKeysDynV,     "rng keys");
-					CHECK_(firstKeyFile == cmdln.firstArg,  "first argument");
-					CHECK_(keyFiles == cmdLnVarargsDynV,    "variadic arguments");
+				#define CHECK_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch\n"; success = false; }
+				#define CHECK_PR_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch (expected '" << (EXPECT_) << "', got '" << (GOT_) << "')\n"; success = false; }
+					CHECK_   (cmdType, cmdln.cmdType,        "command type");
+					CHECK_PR_(opts, cmdln.options,           "options");
+					CHECK_   (rngKeys, cmdLnRngKeysDynV,     "rng keys");
+					CHECK_PR_(zeroArg, cmdln.zeroArg,        "zero argument");
+					CHECK_PR_(firstKeyFile, cmdln.firstArg,  "first argument");
+					CHECK_   (keyFiles, cmdLnVarargsDynV,    "variadic arguments");
 				#undef CHECK_
 				os << std::flush;
 				return success? eSuccess : eFailure;
@@ -142,11 +144,11 @@ namespace {
 
 
 	const auto cmdLines = std::array<DynArgv, 5> {
-		DynArgv { "#", "mux", "--key", "1234", "in.txt", "-k", "5678", "out.1.txt", "out.2.txt", "--key", "9abc" },
-		DynArgv { "#", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
-		DynArgv { "#", "mux", "--key" },
-		DynArgv { "#", "mux" },
-		DynArgv { "#" } };
+		DynArgv { "xor", "mux", "--key", "1234", "in.txt", "-k", "5678", "out.1.txt", "out.2.txt", "--key", "9abc" },
+		DynArgv { "xor", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
+		DynArgv { "xor", "mux", "--key" },
+		DynArgv { "xor", "mux" },
+		DynArgv { "xor" } };
 
 }
 
@@ -158,13 +160,13 @@ int main(int, char**) {
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
 	batch
 	.run("Command line 0", mk_test_cmdln(cmdLines[0],
-		CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
+		"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
 	.run("Command line 1", mk_test_cmdln(cmdLines[1],
-		CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
+		"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
 	.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLine>(cmdLines[2]))
 	.run("Command line 3", mk_test_cmdln(cmdLines[3],
-		CmdType::eMultiplex, { }, "", { }, optNone))
+		"xor", CmdType::eMultiplex, { }, "", { }, optNone))
 	.run("Command line 4", mk_test_cmdln(cmdLines[4],
-		CmdType::eNone, { }, "", { }, optNone));
+		"xor", CmdType::eNone, { }, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

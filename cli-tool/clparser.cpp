@@ -119,7 +119,7 @@ namespace xorinator::cli {
 			// argsDynV:  [0] command,  [1] first arg,  [2] var arg 0,  [3] var arg 1...
 			if(! argsDynV.empty()) {
 				cmdType = type_from_strvw(argsDynV.front());
-				if(argsDynV.size() >= 1) {
+				if(argsDynV.size() > 1) {
 					firstArg = argsDynV[1];
 					if(argsDynV.size() >= 2) {
 						variadicArgs = StaticVector<std::string>(argsDynV.size() - 2);
