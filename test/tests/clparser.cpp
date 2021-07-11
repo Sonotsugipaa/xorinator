@@ -143,11 +143,12 @@ namespace {
 	}
 
 
-	const auto cmdLines = std::array<DynArgv, 5> {
+	const auto cmdLines = std::array<DynArgv, 6> {
 		DynArgv { "xor", "mux", "--key", "1234", "in.txt", "-k", "5678", "out.1.txt", "out.2.txt", "--key", "9abc" },
 		DynArgv { "xor", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
 		DynArgv { "xor", "mux", "--key" },
 		DynArgv { "xor", "mux" },
+		DynArgv { "xor", "invalid subcommand" },
 		DynArgv { "xor" } };
 
 }
@@ -163,10 +164,12 @@ int main(int, char**) {
 		"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
 	.run("Command line 1", mk_test_cmdln(cmdLines[1],
 		"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
-	.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLine>(cmdLines[2]))
+	.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
 	.run("Command line 3", mk_test_cmdln(cmdLines[3],
 		"xor", CmdType::eMultiplex, { }, "", { }, optNone))
 	.run("Command line 4", mk_test_cmdln(cmdLines[4],
+		"xor", CmdType::eError, { }, "", { }, optNone))
+	.run("Command line 5", mk_test_cmdln(cmdLines[5],
 		"xor", CmdType::eNone, { }, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -135,9 +135,9 @@ namespace xorinator::cli {
 	using Options = OptionBits::IntType;
 
 
-	class InvalidCommandLine : public std::runtime_error {
+	class InvalidCommandLineException : public std::runtime_error {
 	public:
-		InvalidCommandLine(std::string msg): std::runtime_error(msg) { }
+		InvalidCommandLineException(std::string msg): std::runtime_error(msg) { }
 	};
 
 
@@ -148,6 +148,7 @@ namespace xorinator::cli {
 		StaticVector<std::string> rngKeys;
 		Options options;
 
+		CommandLine();
 		CommandLine(int argc, char const * const * argv);
 	};
 

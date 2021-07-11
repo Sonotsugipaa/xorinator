@@ -53,7 +53,7 @@ namespace {
 					++cursor;
 					rngKeysDynV.push_back(std::string(argvxx[cursor]));
 				} else {
-					throw xorinator::cli::InvalidCommandLine("no value to "s + std::string(argvxx[cursor]) + " option"s);
+					throw xorinator::cli::InvalidCommandLineException("no value to "s + std::string(argvxx[cursor]) + " option"s);
 				}
 			} else
 			if(argvxx[cursor] == "-q"sv || argvxx[cursor] == "--quiet"sv) {
@@ -84,6 +84,12 @@ namespace {
 
 
 namespace xorinator::cli {
+
+	CommandLine::CommandLine():
+			cmdType(CmdType::eNone),
+			options(OptionBits::eNone)
+	{ }
+
 
 	CommandLine::CommandLine(int argc, char const * const * argv):
 			cmdType(CmdType::eNone),

@@ -26,9 +26,11 @@
 #include "clparser.hpp"
 #include <xorinator.hpp>
 
+using namespace std::string_literals;
+
 using xorinator::cli::CommandLine;
 using xorinator::cli::CmdType;
-using xorinator::cli::InvalidCommandLine;
+using xorinator::cli::InvalidCommandLineException;
 using xorinator::StaticVector;
 
 namespace stdfs {
@@ -138,8 +140,19 @@ namespace {
 	}
 
 
+	void checkPaths(const CommandLine& cmdln) {
+		if(cmdln.firstArg.empty())
+			throw std::runtime_error("invalid file \"\"");
+		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() < 2)
+			throw std::runtime_error("a (de)muxing operation needs two or more keys");
+	}
+
+
 	bool runMux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
+
+		checkPaths(cmdln);
+
 		auto muxIn = VirtualInputStream(cmdln.firstArg);
 		auto muxOut = StaticVector<VirtualOutputStream>(cmdln.variadicArgs.size());
 		auto outputBuffer = StaticVector<byte_t>(muxOut.size());
@@ -195,6 +208,9 @@ namespace {
 
 	bool runDemux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
+
+		checkPaths(cmdln);
+
 		auto demuxOut = VirtualOutputStream(cmdln.firstArg);
 		auto demuxIn = StaticVector<VirtualInputStream>(cmdln.variadicArgs.size());
 		auto rngKeys = StaticVector<RngKey>(cmdln.rngKeys.size());
@@ -274,12 +290,14 @@ namespace {
 	}
 
 
-	bool run(CommandLine cmdln) {
+	bool run(int argc, const char * const * argv, const CommandLine& cmdln) {
 		switch(cmdln.cmdType) {
 			case CmdType::eMultiplex:  return runMux(cmdln);
 			case CmdType::eDemultiplex:  return runDemux(cmdln);
 			case CmdType::eNone:  return usage(cmdln);
-			case CmdType::eError:  default:  return false;
+			case CmdType::eError:  default:
+				throw InvalidCommandLineException(
+					"invalid subcommand \""s + (argc > 0? argv[1] : "") + "\""s);
 		}
 	}
 
@@ -288,5 +306,17 @@ namespace {
 
 
 int main(int argc, char** argv) {
-	return run(CommandLine(argc, argv))? EXIT_SUCCESS : EXIT_FAILURE;
+	CommandLine cmdln;
+	try {
+		cmdln = CommandLine(argc, argv);
+		return run(argc, argv, cmdln)? EXIT_SUCCESS : EXIT_FAILURE;
+	}
+	#define CATCH_EX(EX_) catch(EX_& ex) { \
+		if(! (cmdln.options & xorinator::cli::OptionBits::eQuiet)) \
+		std::cerr << "[" #EX_ "]\n" << ex.what() << std::endl; \
+	}
+		CATCH_EX(InvalidCommandLineException)
+		CATCH_EX(std::exception)
+	#undef CATCH_EX
+	return EXIT_FAILURE;
 }
