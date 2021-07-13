@@ -44,7 +44,10 @@ Notably, using "`-`" as a file name will read or write to the standard input/out
 ### Options
 
 Multiple options can be used anywhere in the argument list, unless the `--` argument is present anywhere - in which case all the arguments after it will not be interpreted as options.  
-At the time of writing, binary options follow the syntax "`--option VALUE`", and multiple unary options (e.g. `-a -b -c`) can**not** be chained together (e.g. `-abc`); however, the POSIX-style option syntax may be implemented in the future.
+The option syntax partially follows the POSIX convention:
+- unary short options may be conflated into a single argument (e.g. "`-abc`" instead of "`-a -b -c`");
+- binary short options may have their values directly after the second character (e.g. "`-kPassphrase`" instead of "`-k Passphrase`");
+- binary long options may have their key and value in the same argument, with a "`=`" separating the two (e.g. "`--key=pass`" instead of "`--key pass`").
 
 #### `--key PASSPHRASE`
 
@@ -77,8 +80,8 @@ Using the `--force` option does not grant access to files owned by other users o
 # BEWARE - doing this defeats the purpose of Xorinator:
 # the "--key" option generates a cryptographically weak hash
 # from which to pseudorandomly generate a OTP.
-xor mux --key hunter2 secret.txt secret.xor
-xor dmx --key hunter2 - secret.xor
+xor mux --key=hunter2 secret.txt secret.xor
+xor dmx --key=hunter2 - secret.xor
 
 # 3-file multiplexing, without passphrase:
 # the "xor" command reads arbitrary text from the standard
