@@ -158,16 +158,16 @@ int main(int, char**) {
 	constexpr static auto optNone = xorinator::cli::OptionBits::eNone;
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
 	batch
-	.run("Command line 0", mk_test_cmdln(cmdLines[0],
-		"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
-	.run("Command line 1", mk_test_cmdln(cmdLines[1],
-		"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
-	.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
-	.run("Command line 3", mk_test_cmdln(cmdLines[3],
-		"xor", CmdType::eMultiplex, { }, "", { }, optNone))
-	.run("Command line 4", mk_test_cmdln(cmdLines[4],
-		"xor", CmdType::eError, { }, "", { }, optNone))
-	.run("Command line 5", mk_test_cmdln(cmdLines[5],
-		"xor", CmdType::eNone, { }, "", { }, optNone));
+		.run("Command line 0", mk_test_cmdln(cmdLines[0],
+			"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
+		.run("Command line 1", mk_test_cmdln(cmdLines[1],
+			"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
+		.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
+		.run("Command line 3", mk_test_cmdln(cmdLines[3],
+			"xor", CmdType::eMultiplex, { }, "", { }, optNone))
+		.run("Command line 4", mk_test_cmdln(cmdLines[4],
+			"xor", CmdType::eError, { }, "", { }, optNone))
+		.run("Command line 5", mk_test_cmdln(cmdLines[5],
+			"xor", CmdType::eNone, { }, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

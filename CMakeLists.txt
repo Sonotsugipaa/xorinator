@@ -29,7 +29,7 @@
 	endif()
 
 
-# Define the C and C++ standards to use
+# Define the C++ standard to use
 
 	set(CMAKE_CXX_STANDARD 20)
 	set(CMAKE_CXX_STANDARD_REQUIRED True)

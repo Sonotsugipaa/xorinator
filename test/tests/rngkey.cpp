@@ -193,17 +193,17 @@ namespace {
 
 int main(int, char**) {
 	constexpr unsigned SHORT_CHARS = 12;
+	constexpr unsigned LONG_CHARS = 4096*4;
 	auto batch = utest::TestBatch(std::cout);
 	batch
-	.run("789a.0x40 == 789a.0x40", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, SHORT_CHARS, true, true>)
-	.run("789a.0x40 == 789a.0x40", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, SHORT_CHARS, true, true>)
-	.run("4321.0x40 != 789a.0x40", test_rng64_to_rng64<0xa987654321, 0x123456789a, 0, SHORT_CHARS, false, true>)
-	.run("4321.0x40 == 4321.0x40 (offset)", test_rng64_to_rng64<0xa987654321, 0xa987654321, 3, 3+SHORT_CHARS, true, true>)
-	.run("789a.0x40 == 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, 4096*4, true, false>)
-	.run("4321.0x40 != 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0xa987654321, 0, 4096*4, false, false>)
-	.run("4321.0x80 == 4321.0x80", test_rng128_to_rng128<0xa987654321, 0xa987654321, 0, SHORT_CHARS, true, true>)
-	.run("4321.0x40 != 4321.0x80", test_rng64_to_rng128<0xa987654321, 0, SHORT_CHARS, false, true>)
-	.run("Deterministic key from string", test_rngkey512)
-	.run("File key", test_filekey);
+		.run("789a.0x40 == 789a.0x40", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, SHORT_CHARS, true, true>)
+		.run("4321.0x40 != 789a.0x40", test_rng64_to_rng64<0xa987654321, 0x123456789a, 0, SHORT_CHARS, false, true>)
+		.run("4321.0x40 == 4321.0x40 (offset)", test_rng64_to_rng64<0xa987654321, 0xa987654321, 3, 3+SHORT_CHARS, true, true>)
+		.run("789a.0x40 == 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, LONG_CHARS, true, false>)
+		.run("4321.0x40 != 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0xa987654321, 0, LONG_CHARS, false, false>)
+		.run("4321.0x80 == 4321.0x80", test_rng128_to_rng128<0xa987654321, 0xa987654321, 0, SHORT_CHARS, true, true>)
+		.run("4321.0x40 != 4321.0x80", test_rng64_to_rng128<0xa987654321, 0, SHORT_CHARS, false, true>)
+		.run("Deterministic key from string", test_rngkey512)
+		.run("File key", test_filekey);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }
