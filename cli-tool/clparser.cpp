@@ -66,7 +66,7 @@ namespace {
 			if(argvxx[cursor] == "-f"sv || argvxx[cursor] == "--force"sv) {
 				options |= xorinator::cli::OptionBits::eForce;
 			} else {
-				throw std::runtime_error(
+				throw xorinator::cli::InvalidCommandLineException(
 					"invalid option \""s + std::string(argvxx[cursor]) + "\""s);
 			}
 			return true;
