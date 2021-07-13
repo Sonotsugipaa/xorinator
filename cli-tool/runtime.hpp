@@ -21,12 +21,19 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <stdexcept>
 
 #include "clparser.hpp"
 
 
 
 namespace xorinator::runtime {
+
+	class FilePermissionException : public std::runtime_error {
+	public:
+		using std::runtime_error::runtime_error;
+	};
+
 
 	/** A std::ifstream / std::ofstream wrapper, that replaces the stream when
 	 * constructed from the path "-". */

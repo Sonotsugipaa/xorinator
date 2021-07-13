@@ -62,6 +62,9 @@ namespace {
 			} else
 			if(argvxx[cursor] == "-q"sv || argvxx[cursor] == "--quiet"sv) {
 				options |= xorinator::cli::OptionBits::eQuiet;
+			} else
+			if(argvxx[cursor] == "-f"sv || argvxx[cursor] == "--force"sv) {
+				options |= xorinator::cli::OptionBits::eForce;
 			} else {
 				throw std::runtime_error(
 					"invalid option \""s + std::string(argvxx[cursor]) + "\""s);

@@ -23,23 +23,33 @@
 #include "clparser.hpp"
 #include "runtime.hpp"
 
-using xorinator::cli::CommandLine;
-using xorinator::cli::InvalidCommandLineException;
-
 
 
 int main(int argc, char** argv) {
+	using xorinator::cli::CommandLine;
+	using xorinator::cli::InvalidCommandLineException;
+	using xorinator::runtime::FilePermissionException;
+	#define IF_QUIET if(! (cmdln.options & xorinator::cli::OptionBits::eQuiet))
+	#define PRINT_EX(EX_) "[" #EX_ "]\n" << ex.what()
+	#define CATCH_EX(EX_) catch(EX_& ex) { \
+		IF_QUIET std::cerr << PRINT_EX(EX_) << std::endl; \
+	}
+
 	CommandLine cmdln;
 	try {
 		cmdln = CommandLine(argc, argv);
 		return xorinator::runtime::run(cmdln)? EXIT_SUCCESS : EXIT_FAILURE;
 	}
-	#define CATCH_EX(EX_) catch(EX_& ex) { \
-		if(! (cmdln.options & xorinator::cli::OptionBits::eQuiet)) \
-		std::cerr << "[" #EX_ "]\n" << ex.what() << std::endl; \
+	catch(FilePermissionException& ex) {
+		IF_QUIET std::cerr
+			<< PRINT_EX(FilePermissionException)
+			<< "\nYou can try to bypass the access permissions with the \"--force\" option."
+			<< std::endl;
 	}
-		CATCH_EX(InvalidCommandLineException)
-		CATCH_EX(std::exception)
-	#undef CATCH_EX
+	CATCH_EX(InvalidCommandLineException)
+	CATCH_EX(std::exception)
 	return EXIT_FAILURE;
+	#undef CATCH_EX
+	#undef PRINT_EX
+	#undef IF_QUIET
 }
