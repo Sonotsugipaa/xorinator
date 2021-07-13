@@ -22,8 +22,6 @@
 #include <random>
 #include <cassert>
 
-#define XORINATOR_UNIX_PERM_CHECK
-#pragma GCC warning "BYPASSING POSIX FEATURE TEST"
 #ifdef XORINATOR_UNIX_PERM_CHECK
 	#include <cerrno>
 	extern "C" {
