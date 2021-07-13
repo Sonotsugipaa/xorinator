@@ -21,6 +21,7 @@
 #include <iostream>
 #include <random>
 #include <cassert>
+#include <unordered_set>
 
 #ifdef XORINATOR_UNIX_PERM_CHECK
 	#include <cerrno>
@@ -133,10 +134,27 @@ namespace {
 
 
 	void checkPaths(const CommandLine& cmdln) {
+		using xorinator::cli::CmdType;
+		using CmdlnException = xorinator::cli::InvalidCommandLineException;
 		if(cmdln.firstArg.empty())
-			throw std::runtime_error("invalid file \"\"");
-		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() < 2)
-			throw std::runtime_error("a (de)muxing operation needs two or more keys");
+			throw CmdlnException("invalid file \"\"");
+		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() < 2) {
+			if(cmdln.cmdType == CmdType::eMultiplex)
+				throw CmdlnException("a multiplexing operation needs two or more keys");
+			if(cmdln.cmdType == CmdType::eDemultiplex)
+				throw CmdlnException("a demultiplexing operation needs two or more keys");
+		}
+		if((! (cmdln.options & xorinator::cli::OptionBits::eForce)) && (
+				(cmdln.cmdType == CmdType::eMultiplex) ||
+				(cmdln.cmdType == CmdType::eDemultiplex)
+		)) {
+			auto paths = std::unordered_set<std::string>(cmdln.variadicArgs.size());
+			paths.insert(cmdln.firstArg);
+			for(size_t i=0; i < cmdln.variadicArgs.size(); ++i) {
+				if(! paths.insert(cmdln.variadicArgs[i]).second)
+					throw CmdlnException("file arguments must be unique");
+			}
+		}
 	}
 
 }
