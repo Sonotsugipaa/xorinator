@@ -62,5 +62,5 @@ xor dmx --key hunter2 - secret.xor
 # In order to rebuild the input, the 3 generated files
 # need to be demultiplexed.
 xor mux - secret.1.xor secret.2.xor secret.3.xor
-xor dmx secret.decrypted.txt xecret.*.xor
+xor dmx secret.decrypted.txt secret.*.xor
 ```
