@@ -104,7 +104,7 @@ namespace {
 				#define CHECK_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch\n"; success = false; }
 				#define CHECK_PR_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch (expected '" << (EXPECT_) << "', got '" << (GOT_) << "')\n"; success = false; }
 					CHECK_   (cmdType, cmdln.cmdType,        "command type");
-					CHECK_PR_(opts, cmdln.options,           "options");
+					CHECK_   (opts, cmdln.options,           "options");
 					CHECK_   (rngKeys, cmdLnRngKeysDynV,     "rng keys");
 					CHECK_PR_(zeroArg, cmdln.zeroArg,        "zero argument");
 					CHECK_PR_(firstKeyFile, cmdln.firstArg,  "first argument");
@@ -141,10 +141,15 @@ namespace {
 	}
 
 
-	const auto cmdLines = std::array<DynArgv, 6> {
+	const auto cmdLines = std::array<DynArgv, 11> {
 		DynArgv { "xor", "mux", "--key", "1234", "in.txt", "-k", "5678", "out.1.txt", "out.2.txt", "--key", "9abc" },
 		DynArgv { "xor", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
-		DynArgv { "xor", "mux", "--key" },
+		DynArgv { "xor", "dmx", "-fq"},
+		DynArgv { "xor", "dmx", "--key=abc"},
+		DynArgv { "xor", "dmx", "-kabc"},
+		DynArgv { "xor", "mux", "--invalid-option" },
+		DynArgv { "xor", "mux", "-fqk" },
+		DynArgv { "xor", "mux", "-fqinvald" },
 		DynArgv { "xor", "mux" },
 		DynArgv { "xor", "invalid subcommand" },
 		DynArgv { "xor" } };
@@ -157,17 +162,26 @@ int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	constexpr static auto optNone = xorinator::cli::OptionBits::eNone;
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
+	constexpr static auto optForce = xorinator::cli::OptionBits::eForce;
 	batch
 		.run("Command line 0", mk_test_cmdln(cmdLines[0],
 			"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
 		.run("Command line 1", mk_test_cmdln(cmdLines[1],
 			"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
-		.run("Command line 2", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
+		.run("Command line 2", mk_test_cmdln(cmdLines[2],
+			"xor", CmdType::eDemultiplex, { }, { }, { }, optQuiet | optForce))
 		.run("Command line 3", mk_test_cmdln(cmdLines[3],
-			"xor", CmdType::eMultiplex, { }, "", { }, optNone))
+			"xor", CmdType::eDemultiplex, { "abc" }, { }, { }, optNone))
 		.run("Command line 4", mk_test_cmdln(cmdLines[4],
+			"xor", CmdType::eDemultiplex, { "abc" }, { }, { }, optNone))
+		.run("Command line 5", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[5]))
+		.run("Command line 6", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[6]))
+		.run("Command line 7", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[7]))
+		.run("Command line 8", mk_test_cmdln(cmdLines[8],
+			"xor", CmdType::eMultiplex, { }, "", { }, optNone))
+		.run("Command line 9", mk_test_cmdln(cmdLines[9],
 			"xor", CmdType::eError, { }, "", { }, optNone))
-		.run("Command line 5", mk_test_cmdln(cmdLines[5],
+		.run("Command line 10", mk_test_cmdln(cmdLines[10],
 			"xor", CmdType::eNone, { }, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

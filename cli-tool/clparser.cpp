@@ -22,11 +22,140 @@
 
 #include <string_view>
 #include <vector>
+#include <optional>
 #include <cstring>
+#include <cassert>
 
 
 
 namespace {
+
+	/** If the long option is in a single argument, split it and return the
+	 * value portion of it; otherwise, increment the cursor and return the next
+	 * argument. If the key does not match the one provided, `std::nullopt`
+	 * is returned. */
+	std::optional<std::string> get_long_option_value(
+			const std::string& key,
+			const xorinator::StaticVector<std::string_view>& argvxx,
+			size_t& cursor
+	) {
+		if(! (argvxx[cursor].starts_with(key.c_str()) && (
+			(argvxx[cursor].size() == key.size()) ||
+			((argvxx[cursor].size() > key.size()) && (argvxx[cursor][key.size()] == '='))
+		))) {
+			return std::nullopt;
+		}
+		{
+			// Check for a '=', eventually return the result
+			for(size_t i=0; char c : argvxx[cursor]) {
+				if(c == '=') {
+					return {
+						std::string(argvxx[cursor].begin() + (i+1), argvxx[cursor].end()) };
+				}
+				++i;
+			}
+		} { // Increment the cursor, then return the two arguments
+			++cursor;
+			if(cursor < argvxx.size()) {
+				return std::string(argvxx[cursor]);
+			} else {
+				return "";
+			}
+		}
+	}
+
+	/** If the short option is in a single argument, split it and return the
+	 * value portion of it; otherwise, increment the cursor and return the next
+	 * argument. If the key does not match the one provided, `std::nullopt`
+	 * is returned. */
+	std::optional<std::string> get_short_option_value(
+			char key,
+			const xorinator::StaticVector<std::string_view>& argvxx,
+			size_t& cursor
+	) {
+		using namespace std::string_literals;
+		if((argvxx[cursor].size() < 2) || (argvxx[cursor][1] != key)) {
+			return std::nullopt;
+		}
+		if(argvxx[cursor].size() == 2) {
+			++cursor;
+			if(cursor < argvxx.size()) {
+				return std::string(argvxx[cursor]);
+			} else {
+				return "";
+			}
+		} else {
+			return std::string(argvxx[cursor].begin() + 2);
+		}
+	}
+
+
+
+
+	/** Checks the presence of a long option argument.
+	 * If the argument is a long option, it is interpreted and the state of
+	 * the "construction" variables is altered accordingly, then returns `true`;
+	 * returns `false` otherwise. */
+	bool check_option_long(
+			const xorinator::StaticVector<std::string_view>& argvxx,
+			size_t& cursor,
+			std::vector<std::string>& rngKeysDynV,
+			xorinator::cli::OptionBits::IntType& options
+	) {
+		using xorinator::cli::OptionBits;
+		if((argvxx[cursor].size() < 3) || (! argvxx[cursor].starts_with("--"))) return false;
+		std::optional<std::string> optValue;
+		if(optValue = get_long_option_value("--key", argvxx, cursor)) {
+			rngKeysDynV.push_back(optValue.value());
+		} else
+		if(argvxx[cursor] == "--quiet") {
+			options = options | OptionBits::eQuiet;
+		} else
+		if(argvxx[cursor] == "--force") {
+			options = options | OptionBits::eForce;
+		} else {
+			throw xorinator::cli::InvalidCommandLineException(
+				"unrecognized option \"" + std::string(argvxx[cursor]) + '"');
+		}
+		return true;
+	}
+
+
+	/** Checks the presence of a short option argument.
+	 * If the argument is a short option, it is interpreted and the state of
+	 * the "construction" variables is altered accordingly, then returns `true`;
+	 * returns `false` otherwise. */
+	bool check_option_short(
+			const xorinator::StaticVector<std::string_view>& argvxx,
+			size_t& cursor,
+			std::vector<std::string>& rngKeysDynV,
+			xorinator::cli::OptionBits::IntType& options
+	) {
+		using xorinator::cli::OptionBits;
+		if(
+				(argvxx[cursor].size() < 2) ||
+				(argvxx[cursor][0] != '-') || (argvxx[cursor][1] == '-')
+		) {
+			return false;
+		}
+		std::optional<std::string> optValue;
+		if(optValue = get_short_option_value('k', argvxx, cursor)) {
+			rngKeysDynV.push_back(optValue.value());
+		} else
+		for(char option : std::string_view(argvxx[cursor].begin() + 1, argvxx[cursor].end())) {
+			if(option == 'q') {
+				options = options | OptionBits::eQuiet;
+			} else
+			if(option == 'f') {
+				options = options | OptionBits::eForce;
+			} else {
+				throw xorinator::cli::InvalidCommandLineException(
+					"unrecognized option \"" + std::string(argvxx[cursor]) + '"');
+			}
+		}
+		return true;
+	}
+
 
 	/** Checks the presence of an option argument.
 	 * If the argument is an option, it is interpreted and the state of
@@ -34,45 +163,13 @@ namespace {
 	 * returns `false` otherwise. */
 	bool check_option(
 			const xorinator::StaticVector<std::string_view>& argvxx,
-			int& cursor,
+			size_t& cursor,
 			std::vector<std::string>& rngKeysDynV,
 			xorinator::cli::OptionBits::IntType& options
 	) {
-		using namespace std::string_literals;
-		using namespace std::string_view_literals;
-
-		static constexpr auto checkOptPrefix = [](const std::string_view& str) {
-			return
-				(str.front() == '-') && (
-					(
-						(str.size() > 2) && (str[1] == '-')
-					) || (
-						str.size() > 1
-					)
-				);
-		};
-		if((! argvxx[cursor].empty()) && checkOptPrefix(argvxx[cursor])) {
-			if(argvxx[cursor] == "-k"sv || argvxx[cursor] == "--key"sv) {
-				if(argvxx.size() > static_cast<unsigned>(cursor) + 1) {
-					++cursor;
-					rngKeysDynV.push_back(std::string(argvxx[cursor]));
-				} else {
-					throw xorinator::cli::InvalidCommandLineException("no value to "s + std::string(argvxx[cursor]) + " option"s);
-				}
-			} else
-			if(argvxx[cursor] == "-q"sv || argvxx[cursor] == "--quiet"sv) {
-				options |= xorinator::cli::OptionBits::eQuiet;
-			} else
-			if(argvxx[cursor] == "-f"sv || argvxx[cursor] == "--force"sv) {
-				options |= xorinator::cli::OptionBits::eForce;
-			} else {
-				throw xorinator::cli::InvalidCommandLineException(
-					"invalid option \""s + std::string(argvxx[cursor]) + "\""s);
-			}
-			return true;
-		} else {
-			return false;
-		}
+		return
+			check_option_short(argvxx, cursor, rngKeysDynV, options) ||
+			check_option_long(argvxx, cursor, rngKeysDynV, options);
 	}
 
 
@@ -111,9 +208,10 @@ namespace xorinator::cli {
 			for(int i=0; i < argc; ++i) {
 				argvxx[i] = std::string_view(argv[i]); }
 		} { // Parse the arguments
-			int cursor = 1;  // Skip the first argv element
+			size_t cursor = 1;  // Skip the first argv element
 			bool literal = false;  // Arguments to be inserted without parsing after "--"
-			while(cursor < argc) {
+			assert(argc >= 0); // You never know
+			while(cursor < size_t(argc)) {
 				if(literal) {
 					argsDynV.push_back(std::string(argvxx[cursor]));
 				} else {
