@@ -59,7 +59,7 @@ namespace {
 
 		VirtualStream(): stream_(nullptr), preallocated_(false) { }
 
-		VirtualStream(stream_t& ref): stream_(&ref), preallocated_(false) { }
+		VirtualStream(stream_t& ref): stream_(&ref), preallocated_(true) { }
 
 		VirtualStream(const std::string& path) {
 			if(path != "-") {
