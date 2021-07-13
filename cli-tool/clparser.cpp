@@ -24,19 +24,23 @@
 #include <vector>
 #include <cstring>
 
-using namespace std::string_literals;
-using namespace std::string_view_literals;
-
 
 
 namespace {
 
+	/** Checks the presence of an option argument.
+	 * If the argument is an option, it is interpreted and the state of
+	 * the "construction" variables is altered accordingly, then returns `true`;
+	 * returns `false` otherwise. */
 	bool check_option(
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			int& cursor,
 			std::vector<std::string>& rngKeysDynV,
 			xorinator::cli::OptionBits::IntType& options
 	) {
+		using namespace std::string_literals;
+		using namespace std::string_view_literals;
+
 		static constexpr auto checkOptPrefix = [](const std::string_view& str) {
 			return
 				(str.front() == '-') && (
@@ -95,6 +99,7 @@ namespace xorinator::cli {
 			cmdType(CmdType::eNone),
 			options(0)
 	{
+		using namespace std::string_view_literals;
 		auto argvxx = StaticVector<std::string_view>(argc);
 		std::vector<std::string> rngKeysDynV;  rngKeysDynV.reserve(2);
 		std::vector<std::string> argsDynV;  argsDynV.reserve(argc);
@@ -113,6 +118,8 @@ namespace xorinator::cli {
 						literal = true;
 					}
 					else if(! check_option(argvxx, cursor, rngKeysDynV, options)) {
+						/* If ::check_option returns `true`, then `cursor`, `rngKeysDynV` and
+						 * `cursor` are modified by said function. */
 						argsDynV.push_back(std::string(argvxx[cursor]));
 					}
 				}
@@ -122,7 +129,7 @@ namespace xorinator::cli {
 			zeroArg = argvxx[0];
 			rngKeys = StaticVector<std::string>(rngKeysDynV.size());
 			std::move(rngKeysDynV.begin(), rngKeysDynV.end(), rngKeys.begin());
-			// argsDynV:  [0] command,  [1] first arg,  [2] var arg 0,  [3] var arg 1...
+			// argsDynV:  [0] subcommand,  [1] first arg,  [2] var arg 0,  [3] var arg 1...
 			if(! argsDynV.empty()) {
 				cmdType = type_from_strvw(argsDynV.front());
 				if(argsDynV.size() > 1) {

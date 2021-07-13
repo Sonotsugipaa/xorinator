@@ -26,8 +26,6 @@
 #include <fstream>
 #include <filesystem>
 
-using namespace std::string_literals;
-
 
 
 namespace {
@@ -142,6 +140,7 @@ namespace {
 
 
 	utest::ResultType test_filekey(std::ostream& os) {
+		using namespace std::string_literals;
 		const static std::string keyStr = "deterministic key"s;
 		const static std::string filename = "test_tmpfile"s;
 		const static size_t offset = 2;

@@ -22,9 +22,6 @@
 
 #include <iostream>
 
-using namespace std::string_literals;
-using namespace utest;
-
 
 
 namespace {
@@ -36,16 +33,19 @@ namespace {
 
 
 	std::string strSuccess(const std::string& name, unsigned pad) {
+		using namespace utest;
 		return stretch_str(name, pad) + "... " +
 			colorResult<ResultType::eSuccess>("Success");
 	}
 
 	std::string strFailure(const std::string& name, unsigned pad) {
+		using namespace utest;
 		return stretch_str(name, pad) + "... " +
 			colorResult<ResultType::eFailure>("Failure");
 	}
 
 	std::string strNeutral(const std::string& name, unsigned pad) {
+		using namespace utest;
 		return stretch_str(name, pad) + "... " +
 			colorResult<ResultType::eNeutral>("Review output");
 	}

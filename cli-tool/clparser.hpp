@@ -30,6 +30,8 @@
 
 namespace xorinator {
 
+	/** A basic container whose size doesn't change, but cannot
+	 * be determined at compile time. */
 	template<typename T>
 	class StaticVector {
 	public:
@@ -73,7 +75,7 @@ namespace xorinator {
 				container_(std::move(mv.container_))
 		{
 			mv.size_ = 0;
-			mv.container_ = 0;
+			mv.container_ = nullptr;
 		}
 
 		SV_CONSTEXPR ~StaticVector() {
@@ -142,13 +144,25 @@ namespace xorinator::cli {
 
 
 	struct CommandLine {
+		/** The type of command, or the subcommand. */
 		CmdType cmdType;
-		std::string zeroArg, firstArg;
+		/** The first argument as given by ::main(int, char**) -
+		 * typically a path to the executable file. */
+		std::string zeroArg;
+		/** The first non-option argument after the subcommand. */
+		std::string firstArg;
+		/** The list of non-option arguments after `firstArg`. */
 		StaticVector<std::string> variadicArgs;
+		/** A list of "--key" options. */
 		StaticVector<std::string> rngKeys;
+		/** Unary option arguments. */
 		Options options;
 
+		/** Constructs a null CommandLine instance. */
 		CommandLine();
+
+		/** Constructs a CommandLine instance by parsing the command
+		 * line from the arguments given to ::main(int, char**). */
 		CommandLine(int argc, char const * const * argv);
 	};
 

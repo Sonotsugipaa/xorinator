@@ -22,11 +22,10 @@
 #include <fstream>
 #include <filesystem>
 #include <random>
+#include <cassert>
 
 #include "clparser.hpp"
 #include <xorinator.hpp>
-
-using namespace std::string_literals;
 
 using xorinator::cli::CommandLine;
 using xorinator::cli::CmdType;
@@ -41,6 +40,8 @@ namespace stdfs {
 
 namespace {
 
+	/** A std::ifstream / std::ofstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
 	template<typename stream_t, typename file_stream_t>
 	class VirtualStream {
 	private:
@@ -105,7 +106,12 @@ namespace {
 		operator const stream_t&() const { return get(); }
 	};
 
+	/** A std::ifstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
 	using VirtualInputStream = VirtualStream<std::istream, std::ifstream>;
+
+	/** A std::ofstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
 	using VirtualOutputStream = VirtualStream<std::ostream, std::ofstream>;
 
 
@@ -126,6 +132,9 @@ namespace {
 	}
 
 
+	/** Creates a deterministic number sequence from an arbitrary string,
+	 * by hashing it with a simple algorithm involving xor operations
+	 * and linear congruential RNGs. */
 	RngKey keyFromGenerator(const std::string& gen) {
 		RngKey::word_t hash = 0;
 		std::array<RngKey::word_t, RngKey::word_count> key;
@@ -172,7 +181,7 @@ namespace {
 			 * but the default constructor for Iterator zero-initializes
 			 * its members. The only dubious case is "generators_", a
 			 * unique_ptr, but initializing it with nullptr should make it
-			 * "overridable". */
+			 * "overridable". A proper way of doing this must be investigated. */
 			new (&rngKeyIterators[i]) RngKey::View::Iterator(rngKeyViews[i].begin());
 			++i;
 		}
@@ -227,7 +236,7 @@ namespace {
 		}
 
 		demuxOut.get().exceptions(std::ios_base::badbit);
-		for(unsigned i=0; const std::string& path : cmdln.variadicArgs) {
+		for(size_t i=0; const std::string& path : cmdln.variadicArgs) {
 			demuxIn[i] = path;
 			demuxIn[i].get().exceptions(std::ios_base::badbit);
 			++i;
@@ -295,6 +304,7 @@ namespace {
 
 
 	bool run(int argc, const char * const * argv, const CommandLine& cmdln) {
+		using namespace std::string_literals;
 		switch(cmdln.cmdType) {
 			case CmdType::eMultiplex:  return runMux(cmdln);
 			case CmdType::eDemultiplex:  return runDemux(cmdln);

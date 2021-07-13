@@ -25,8 +25,6 @@
 #include <array>
 #include <iostream>
 
-using namespace std::string_literals;
-
 
 
 namespace {
