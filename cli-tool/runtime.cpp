@@ -22,6 +22,16 @@
 #include <random>
 #include <cassert>
 
+#define XORINATOR_UNIX_PERM_CHECK
+#pragma GCC warning "BYPASSING POSIX FEATURE TEST"
+#ifdef XORINATOR_UNIX_PERM_CHECK
+	#include <cerrno>
+	extern "C" {
+		#include <sys/stat.h>
+		#include <unistd.h>
+	}
+#endif
+
 #include <xorinator.hpp>
 
 #include "runtime.hpp"
@@ -37,6 +47,61 @@ using RngKey = xorinator::RngKey<512>;
 
 
 namespace {
+
+	#ifdef XORINATOR_UNIX_PERM_CHECK
+
+		#ifndef S_IRUSR // This is to make VS Code shut up about undefined S_IR*** macros
+			#define S_IRUSR 0400
+			#define S_IRGRP 0040
+			#define S_IROTH 0004
+		#endif
+
+		template<mode_t rwxBit>
+		std::string_view rwxString;
+
+		template<> std::string_view rwxString<01> = "execute";
+		template<> std::string_view rwxString<02> = "write";
+		template<> std::string_view rwxString<04> = "read";
+
+		template<mode_t rwxBit>
+		void checkFilePermission(const std::string& path) {
+			static_assert(S_IRUSR == 0400);
+			static_assert(S_IRGRP == 0040);
+			static_assert(S_IROTH == 0004);
+			static_assert((rwxBit == 01) || (rwxBit == 02) | (rwxBit == 04));
+			if(path == "-") return; // This may need to be removed in the future, but for now every file named "-" is stdin/stdout
+			struct stat statResult;
+			if(0 == stat(path.c_str(), &statResult)) {
+				if(S_ISDIR(statResult.st_mode)) {
+					throw xorinator::runtime::FilePermissionException(
+						'"'+path+"\" is an existing directory");
+				}
+				uid_t prUid = geteuid();
+				gid_t prGid = getegid();
+				mode_t offset = 0;
+				if(statResult.st_uid != prUid) {
+					if(statResult.st_gid == prGid)
+						offset = 3;
+					else
+						offset = 6;
+				}
+				if(! (statResult.st_mode & (04 << offset))) {
+					throw xorinator::runtime::FilePermissionException(
+						"user doesn't have " + std::string(rwxString<rwxBit>) +
+						" permissions for \"" + path + '"');
+				}
+			} else {
+				switch(errno) {
+					case ENOENT:  return;
+					default:
+						throw xorinator::runtime::FilePermissionException(
+							"could not determine permissions for file \""+path+'"');
+				}
+			}
+		}
+
+	#endif
+
 
 	Rng mk_rng() {
 		static auto rndDev = std::random_device();
@@ -86,6 +151,14 @@ namespace xorinator::runtime {
 		using xorinator::byte_t;
 
 		checkPaths(cmdln);
+
+		#ifdef XORINATOR_UNIX_PERM_CHECK
+			if(! (cmdln.options & cli::OptionBits::eForce)) {
+				checkFilePermission<04>(cmdln.firstArg);
+				for(const auto& file : cmdln.variadicArgs) {
+					checkFilePermission<02>(file); }
+			}
+		#endif
 
 		auto muxIn = VirtualInputStream(cmdln.firstArg);
 		auto muxOut = StaticVector<VirtualOutputStream>(cmdln.variadicArgs.size());
@@ -144,6 +217,14 @@ namespace xorinator::runtime {
 		using xorinator::byte_t;
 
 		checkPaths(cmdln);
+
+		#ifdef XORINATOR_UNIX_PERM_CHECK
+			if(! (cmdln.options & cli::OptionBits::eForce)) {
+				checkFilePermission<02>(cmdln.firstArg);
+				for(const auto& file : cmdln.variadicArgs) {
+					checkFilePermission<04>(file); }
+			}
+		#endif
 
 		auto demuxOut = VirtualOutputStream(cmdln.firstArg);
 		auto demuxIn = StaticVector<VirtualInputStream>(cmdln.variadicArgs.size());
@@ -219,8 +300,9 @@ namespace xorinator::runtime {
 			<< "   " << zeroArg << " help | ?\n"
 			<< '\n'
 			<< "Options:\n"
-			<< "   -k PASSPHRASE | --key PASSPHRASE\n"
-			<< "   -q | --quiet\n"
+			<< "   -k PASSPHRASE | --key PASSPHRASE  (add a RNG as a one-time pad)\n"
+			<< "   -q | --quiet  (suppress error messages)\n"
+			<< "   -f | --force  (skip permission checks)\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
 			<< "Aliases for \"demultiplex\": demux, dmx, d\n" << std::endl;

@@ -131,6 +131,7 @@ namespace xorinator::cli {
 		constexpr static IntType eNone = 0;
 		#define OPTION_BIT_(NAME_, POS_) constexpr static IntType NAME_ = 1 << POS_;
 			OPTION_BIT_(eQuiet, 0)
+			OPTION_BIT_(eForce, 1)
 		#undef OPTION_BIT_
 	};
 
