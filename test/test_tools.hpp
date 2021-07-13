@@ -22,6 +22,7 @@
 
 #include <vector>
 #include <string>
+#include <string_view>
 #include <functional>
 #include <atomic>
 #include <mutex>
