@@ -9,4 +9,10 @@ endif()
 add_executable(xor main.cpp)
 target_link_libraries(xor clparser xor-runtime)
 
+# Strip executable for release builds
+if(${CMAKE_BUILD_TYPE} STREQUAL Release)
+	add_custom_command(TARGET xor POST_BUILD
+			COMMAND ${CMAKE_STRIP} xor)
+endif()
+
 install(TARGETS xor DESTINATION bin)
