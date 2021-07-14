@@ -321,7 +321,7 @@ namespace xorinator::runtime {
 			<< "   -f | --force  (skip permission checks)\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
-			<< "Aliases for \"demultiplex\": demux, dmx, d\n" << std::endl;
+			<< "Aliases for \"demultiplex\": demux, dmx, d" << std::endl;
 		return false;
 	}
 
