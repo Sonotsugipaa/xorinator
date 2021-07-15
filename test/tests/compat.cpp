@@ -119,6 +119,30 @@ namespace {
 	};
 
 
+	utest::ResultType test_keys_demux(std::ostream& os) {
+		try {
+			{ // Create the files
+				if(! mkFile(os, srcCpPath, message))  return utest::ResultType::eNeutral;
+				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
+			} { // Run the multiplex subcommand
+				const char* argv[6] = { "xor", "dmx", "-k1234", "-klaks", srcCpPath.c_str(), otpDstPath0.c_str()};
+				if(! xorinator::runtime::runDemux(xorinator::cli::CommandLine(6, argv))) {
+					return utest::ResultType::eFailure;
+				}
+			} { // Compare the result    a208 7f37 2d29 71de
+				static const std::string hardcodedExpect = {
+					char(0xa2),  char(0x08),  char(0x7f),  char(0x37),
+					char(0x2d),  char(0x29),  char(0x71),  char(0xde) };
+				if(! cmpFile(os, srcCpPath, hardcodedExpect))  return eFailure;
+			}
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+		return eSuccess;
+	}
+
+
 	utest::ResultType test_mux_demux(std::ostream& os) {
 		try {
 			{ // Create the file
@@ -144,7 +168,7 @@ namespace {
 	}
 
 
-	utest::ResultType test_demux(std::ostream& os) {
+	utest::ResultType test_pads_demux(std::ostream& os) {
 		try {
 			{ // Create the files
 				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
@@ -174,7 +198,8 @@ namespace {
 int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	batch
-		.run("mux & demux", test_mux_demux)
-		.run("demux consistency", test_demux);
+		.run("demux consistency (for pads)", test_pads_demux)
+		.run("demux consistency (for keys)", test_keys_demux)
+		.run("mux & demux", test_mux_demux);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }
