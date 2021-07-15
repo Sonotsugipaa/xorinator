@@ -27,6 +27,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <array>
 
 
 
@@ -42,6 +43,7 @@ namespace {
 	const std::string otpDstPath0 = "deterministic-msg.1.xor";
 	const std::string otpDstPath1 = "deterministic-msg.2.xor";
 	const std::string message = "rcompat\n";
+	const std::string expectedExceptionMsg = "Expected an exception, none thrown";
 
 	bool mkFile(std::ostream& os, const std::string& path, const std::string& content) {
 		try {
@@ -119,19 +121,93 @@ namespace {
 	};
 
 
+	template<bool muxNotDemux>
+	utest::ResultType test_not_enough_pads(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			if constexpr(muxNotDemux) {
+				std::array<const char*, 4> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str() };
+				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} else {
+				std::array<const char*, 4> argv = { "xor", "dmx", srcPath.c_str(), otpDstPath0.c_str() };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			}
+		} catch(xorinator::cli::InvalidCommandLineException& ex) {
+			os << "InvalidCommandLineException: " << ex.what() << std::endl;
+			return eSuccess;
+		}
+		os << expectedExceptionMsg << std::endl;
+		return eFailure;
+	}
+
+
+	template<bool muxNotDemux>
+	utest::ResultType test_no_pad(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			if constexpr(muxNotDemux) {
+				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), "-k1234", "-k5678" };
+				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} else {
+				std::array<const char*, 5> argv = { "xor", "dmx", srcPath.c_str(), "-k1234", "-k5678" };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			}
+		} catch(xorinator::cli::InvalidCommandLineException& ex) {
+			os << "InvalidCommandLineException: " << ex.what() << std::endl;
+			return eSuccess;
+		}
+		os << expectedExceptionMsg << std::endl;
+		return eFailure;
+	}
+
+
+	utest::ResultType test_keys_demux(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			{ // Create the files
+				if(! mkFile(os, srcCpPath, message))  return utest::ResultType::eNeutral;
+				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
+			} { // Run the multiplex subcommand
+				std::array<const char*, 6> argv = { "xor", "dmx", "-k1234", "-klaks", srcCpPath.c_str(), otpDstPath0.c_str()};
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} { // Compare the result    a208 7f37 2d29 71de
+				static const std::string hardcodedExpect = {
+					char(0xa2),  char(0x08),  char(0x7f),  char(0x37),
+					char(0x2d),  char(0x29),  char(0x71),  char(0xde) };
+				if(! cmpFile(os, srcCpPath, hardcodedExpect))  return eFailure;
+			}
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+		return eSuccess;
+	}
+
+
 	utest::ResultType test_mux_demux(std::ostream& os) {
+		using xorinator::cli::CommandLine;
 		try {
 			{ // Create the file
 				if(! mkFile(os, srcPath, message))  return utest::ResultType::eNeutral;
 			} { // Run the multiplex subcommand
-				const char* argv[5] = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runMux(xorinator::cli::CommandLine(5, argv))) {
-					return utest::ResultType::eFailure;
+				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
 				}
 			} { // Run the demultiplex subcommand
-				const char* argv[5] = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runDemux(xorinator::cli::CommandLine(5, argv))) {
-					return utest::ResultType::eFailure;
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
 				}
 			} { // Compare the files
 				if(! cmpFiles(os, srcPath, srcCpPath))  return eFailure;
@@ -144,15 +220,16 @@ namespace {
 	}
 
 
-	utest::ResultType test_demux(std::ostream& os) {
+	utest::ResultType test_pads_demux(std::ostream& os) {
+		using xorinator::cli::CommandLine;
 		try {
 			{ // Create the files
 				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
 				if(! mkFile(os, otpDstPath1, "zyxwvuts"))  return utest::ResultType::eNeutral;
 			} { // Run the demultiplex subcommand
-				const char* argv[5] = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runDemux(xorinator::cli::CommandLine(5, argv))) {
-					return utest::ResultType::eFailure;
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
 				}
 			} { // Compare the result
 				static const std::string hardcodedExpect = {
@@ -174,7 +251,12 @@ namespace {
 int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	batch
-		.run("mux & demux", test_mux_demux)
-		.run("demux consistency", test_demux);
+		.run("demux consistency (for pads)", test_pads_demux)
+		.run("demux consistency (for keys)", test_keys_demux)
+		.run("not enough outputs (mux)", test_not_enough_pads<true>)
+		.run("not enough outputs (demux)", test_not_enough_pads<false>)
+		.run("no output (mux)", test_no_pad<true>)
+		.run("no output (demux)", test_no_pad<false>)
+		.run("mux & demux", test_mux_demux);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }
