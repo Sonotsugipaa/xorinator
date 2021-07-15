@@ -49,12 +49,6 @@ namespace {
 
 	#ifdef XORINATOR_UNIX_PERM_CHECK
 
-		#ifndef S_IRUSR // This is to make VS Code shut up about undefined S_IR*** macros
-			#define S_IRUSR 0400
-			#define S_IRGRP 0040
-			#define S_IROTH 0004
-		#endif
-
 		template<mode_t rwxBit>
 		std::string_view rwxString;
 
@@ -144,9 +138,14 @@ namespace {
 			if(cmdln.cmdType == CmdType::eDemultiplex)
 				throw CmdlnException("a demultiplexing operation needs two or more keys");
 		}
+		if(cmdln.variadicArgs.empty()) {
+			if(cmdln.cmdType == CmdType::eMultiplex)
+				throw CmdlnException("a multiplexing operation needs one or more output files");
+			if(cmdln.cmdType == CmdType::eDemultiplex)
+				throw CmdlnException("a demultiplexing operation needs one or more input files");
+		}
 		if((! (cmdln.options & xorinator::cli::OptionBits::eForce)) && (
-				(cmdln.cmdType == CmdType::eMultiplex) ||
-				(cmdln.cmdType == CmdType::eDemultiplex)
+				(cmdln.cmdType == CmdType::eMultiplex) || (cmdln.cmdType == CmdType::eDemultiplex)
 		)) {
 			auto paths = std::unordered_set<std::string>(cmdln.variadicArgs.size());
 			paths.insert(cmdln.firstArg);
@@ -187,15 +186,7 @@ namespace xorinator::runtime {
 		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
 			rngKeys[i] = keyFromGenerator(key);
 			rngKeyViews[i] = rngKeys[i].view(0);
-			/* The next line is a bit of a hack: an iterator has no copy
-			 * assignment operator, but it needs to be initialized somehow;
-			 * unfortunately, the StaticVector initializes its content in the
-			 * first place through the default constructor.
-			 * Technically, placement new initialization is illegal here,
-			 * but the default constructor for Iterator zero-initializes
-			 * its members. The only dubious case is "generators_", a
-			 * unique_ptr, but initializing it with nullptr should make it
-			 * "overridable". A proper way of doing this must be investigated. */
+			rngKeyIterators[i].~Iterator(); // Much like Thanos, this is inevitable. Hopefully this can and does get optimized away.
 			new (&rngKeyIterators[i]) ::RngKey::View::Iterator(rngKeyViews[i].begin());
 			++i;
 		}
