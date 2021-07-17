@@ -47,6 +47,9 @@ using RngKey = xorinator::RngKey<512>;
 
 namespace {
 
+	constexpr unsigned RNG_RESET_AFTER = 512; // Reset a RNG after X bytes
+
+
 	#ifdef XORINATOR_UNIX_PERM_CHECK
 
 		template<mode_t rwxBit>
@@ -95,12 +98,6 @@ namespace {
 
 	#endif
 
-
-	Rng mk_rng() {
-		static auto rndDev = std::random_device();
-		Rng rng = Rng(rndDev());
-		return rng;
-	}
 
 	template<typename uint_t>
 	uint_t random(Rng& rng) {
@@ -175,13 +172,14 @@ namespace xorinator::runtime {
 			}
 		#endif
 
+		auto rndDev = std::random_device();
 		auto muxIn = VirtualInputStream(cmdln.firstArg);
 		auto muxOut = StaticVector<VirtualOutputStream>(cmdln.variadicArgs.size());
 		auto outputBuffer = StaticVector<byte_t>(muxOut.size());
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
 		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
-		auto rng = mk_rng();
+		auto rng = Rng(rndDev());
 
 		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
 			rngKeys[i] = keyFromGenerator(key);
@@ -199,6 +197,7 @@ namespace xorinator::runtime {
 		}
 
 		char inputChar;
+		unsigned rngBytesGenerated = 0;
 		while(muxIn.get().get(inputChar)) {
 			byte_t xorSum = 0;
 			for(size_t i=1; i < muxOut.size(); ++i) {
@@ -212,6 +211,11 @@ namespace xorinator::runtime {
 			outputBuffer[0] = byte_t(inputChar) ^ xorSum;
 			for(size_t i=0; auto& output : muxOut) {
 				output.get().put(outputBuffer[i++]); }
+			if(rngBytesGenerated >= RNG_RESET_AFTER) {
+				rng = Rng(rndDev());
+				rngBytesGenerated = 0;
+			}
+			++rngBytesGenerated;
 		}
 		for(auto& output : muxOut) {
 			output.get().flush(); }
