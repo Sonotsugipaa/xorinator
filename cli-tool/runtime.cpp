@@ -40,7 +40,7 @@ using xorinator::cli::CmdType;
 using xorinator::cli::InvalidCommandLineException;
 using xorinator::StaticVector;
 
-using Rng = std::mt19937;
+using Rng = std::mt19937_64;
 using RngKey = xorinator::RngKey<512>;
 
 
@@ -99,11 +99,74 @@ namespace {
 	#endif
 
 
+	class RngAdapter {
+	private:
+		using rtype = Rng::result_type;
+		using dtype = std::random_device::result_type;
+		using byte_t = xorinator::byte_t;
+		static_assert(0 == sizeof(rtype) % sizeof(byte_t));
+		static constexpr unsigned rtype_bytes = sizeof(rtype) / sizeof(byte_t);
+		static constexpr unsigned dtype_bytes = sizeof(rtype) / sizeof(byte_t);
+
+		std::random_device rndDev_;
+		Rng rng_;
+		rtype rngState_;
+		dtype rndDevState_;
+		unsigned rngStateByteIndex_;
+		unsigned rndDevByteIndex_;
+		unsigned rngByteIndex_;
+
+		dtype fwdDevRandom_() {
+			static constexpr unsigned bits = std::numeric_limits<byte_t>::digits;
+			if(rndDevByteIndex_ >= dtype_bytes) {
+				rndDev_();
+				rndDevByteIndex_ = 0;
+			}
+			auto r = byte_t(rngState_ >> rtype((rndDevByteIndex_++) * bits));
+			return r;
+		}
+
+	public:
+		static std::random_device mkRandomDevice() {
+			return std::random_device();
+		}
+
+		RngAdapter():
+				rndDev_(),
+				rng_(rndDev_()),
+				rngState_(rng_()),
+				rngStateByteIndex_(0),
+				rndDevByteIndex_(0),
+				rngByteIndex_(0)
+		{ }
+
+		byte_t operator()() {
+			static constexpr unsigned bits = std::numeric_limits<byte_t>::digits;
+			if(rngStateByteIndex_ >= rtype_bytes) {
+				if(rngByteIndex_ >= RNG_RESET_AFTER) {
+					rng_ = Rng(fwdDevRandom_());
+					rngByteIndex_ = 0;
+				}
+				rngState_ = rng_();
+				rngStateByteIndex_ = 0;
+			}
+			auto r = byte_t(rngState_ >> rtype((rngStateByteIndex_++) * bits));
+			++rngByteIndex_;
+			return r;
+		}
+	};
+
+
 	template<typename uint_t>
-	uint_t random(Rng& rng) {
+	uint_t random(RngAdapter& rng) {
+		using byte_t = xorinator::byte_t;
 		static_assert(std::numeric_limits<uint_t>::is_integer);
 		static_assert(! std::numeric_limits<uint_t>::is_signed);
-		return rng();
+		uint_t r = 0;
+		for(unsigned i=0; i < (sizeof(uint_t) / sizeof(byte_t)); ++i) {
+			r = r | rng();
+		}
+		return r;
 	}
 
 
@@ -116,7 +179,7 @@ namespace {
 		for(std::string::size_type i=0; i < gen.size(); ++i) {
 			hash = hash ^ std::minstd_rand(gen[i] ^ i)();
 		}
-		Rng rng = Rng(hash);
+		auto rng = std::mt19937(hash);
 		for(RngKey::word_t& word : key) {
 			word = rng();
 		}
@@ -179,7 +242,7 @@ namespace xorinator::runtime {
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
 		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
-		auto rng = Rng(rndDev());
+		RngAdapter rng;
 
 		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
 			rngKeys[i] = keyFromGenerator(key);
@@ -197,7 +260,6 @@ namespace xorinator::runtime {
 		}
 
 		char inputChar;
-		unsigned rngBytesGenerated = 0;
 		while(muxIn.get().get(inputChar)) {
 			byte_t xorSum = 0;
 			for(size_t i=1; i < muxOut.size(); ++i) {
@@ -211,11 +273,6 @@ namespace xorinator::runtime {
 			outputBuffer[0] = byte_t(inputChar) ^ xorSum;
 			for(size_t i=0; auto& output : muxOut) {
 				output.get().put(outputBuffer[i++]); }
-			if(rngBytesGenerated >= RNG_RESET_AFTER) {
-				rng = Rng(rndDev());
-				rngBytesGenerated = 0;
-			}
-			++rngBytesGenerated;
 		}
 		for(auto& output : muxOut) {
 			output.get().flush(); }
