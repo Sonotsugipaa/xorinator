@@ -219,15 +219,24 @@ namespace {
 	}
 
 
+	template<size_t litter>
 	utest::ResultType test_mux_demux(std::ostream& os) {
 		using xorinator::cli::CommandLine;
 		try {
 			{ // Create the file
 				if(! mkFile(os, srcPath, message))  return utest::ResultType::eNeutral;
 			} { // Run the multiplex subcommand
-				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
-					return eFailure;
+				if constexpr(litter == 0) {
+					std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+						return eFailure;
+					}
+				} else {
+					std::string litterArg = "--litter=" + std::to_string(litter);
+					std::array<const char*, 6> argv = { "xor", "mux", litterArg.c_str(), srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+						return eFailure;
+					}
 				}
 			} { // Run the demultiplex subcommand
 				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
@@ -283,6 +292,7 @@ int main(int, char**) {
 		.run("not enough outputs (demux)", test_not_enough_pads<false>)
 		.run("no output (mux)", test_no_pad<true>)
 		.run("no output (demux)", test_no_pad<false>)
-		.run("mux & demux", test_mux_demux);
+		.run("mux & demux", test_mux_demux<0>)
+		.run("mux & demux (--litter=64)", test_mux_demux<64>);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

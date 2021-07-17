@@ -25,10 +25,29 @@
 #include <optional>
 #include <cstring>
 #include <cassert>
+#include <cmath>
 
 
 
 namespace {
+
+	template<typename uint>
+	std::optional<uint> parse_uint(const std::string& str) {
+		using ssize_t = std::make_signed_t<size_t>;
+		uint r = 0;
+		auto last = str.size() - 1;
+		for(ssize_t i = last; i >= 0; --i) {
+			static_assert('9' - '0' == 9);
+			int decDigitValue = str[i] - '0';
+			if((decDigitValue < 0) || (decDigitValue > 9)) {
+				return std::nullopt;
+			} else {
+				r += decDigitValue * pow(10, last - i);
+			}
+		}
+		return r;
+	}
+
 
 	/** If the long option is in a single argument, split it and return the
 	 * value portion of it; otherwise, increment the cursor and return the next
@@ -91,7 +110,6 @@ namespace {
 
 
 
-
 	/** Checks the presence of a long option argument.
 	 * If the argument is a long option, it is interpreted and the state of
 	 * the "construction" variables is altered accordingly, then returns `true`;
@@ -100,13 +118,23 @@ namespace {
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
 			std::vector<std::string>& rngKeysDynV,
-			xorinator::cli::OptionBits::IntType& options
+			xorinator::cli::OptionBits::IntType& options,
+			size_t& litterSize
 	) {
 		using xorinator::cli::OptionBits;
 		if((argvxx[cursor].size() < 3) || (! argvxx[cursor].starts_with("--"))) return false;
 		std::optional<std::string> optValue;
 		if(optValue = get_long_option_value("--key", argvxx, cursor)) {
 			rngKeysDynV.push_back(optValue.value());
+		} else
+		if(optValue = get_long_option_value("--litter", argvxx, cursor)) {
+			auto uintValue = parse_uint<size_t>(optValue.value());
+			if(uintValue) {
+				litterSize = uintValue.value();
+			} else {
+				throw xorinator::cli::InvalidCommandLineException(
+					"invalid positive number \"" + optValue.value() + '"');
+			}
 		} else
 		if(argvxx[cursor] == "--quiet") {
 			options = options | OptionBits::eQuiet;
@@ -129,7 +157,8 @@ namespace {
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
 			std::vector<std::string>& rngKeysDynV,
-			xorinator::cli::OptionBits::IntType& options
+			xorinator::cli::OptionBits::IntType& options,
+			size_t& litterSize
 	) {
 		using xorinator::cli::OptionBits;
 		if(
@@ -141,6 +170,15 @@ namespace {
 		std::optional<std::string> optValue;
 		if(optValue = get_short_option_value('k', argvxx, cursor)) {
 			rngKeysDynV.push_back(optValue.value());
+		} else
+		if(optValue = get_short_option_value('g', argvxx, cursor)) {
+			auto uintValue = parse_uint<size_t>(optValue.value());
+			if(uintValue) {
+				litterSize = uintValue.value();
+			} else {
+				throw xorinator::cli::InvalidCommandLineException(
+					"invalid positive number \"" + optValue.value() + '"');
+			}
 		} else
 		for(char option : std::string_view(argvxx[cursor].begin() + 1, argvxx[cursor].end())) {
 			if(option == 'q') {
@@ -165,11 +203,12 @@ namespace {
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
 			std::vector<std::string>& rngKeysDynV,
-			xorinator::cli::OptionBits::IntType& options
+			xorinator::cli::OptionBits::IntType& options,
+			size_t& litterSize
 	) {
 		return
-			check_option_short(argvxx, cursor, rngKeysDynV, options) ||
-			check_option_long(argvxx, cursor, rngKeysDynV, options);
+			check_option_short(argvxx, cursor, rngKeysDynV, options, litterSize) ||
+			check_option_long(argvxx, cursor, rngKeysDynV, options, litterSize);
 	}
 
 
@@ -191,12 +230,14 @@ namespace xorinator::cli {
 
 	CommandLine::CommandLine():
 			cmdType(CmdType::eNone),
+			litterSize(0),
 			options(OptionBits::eNone)
 	{ }
 
 
 	CommandLine::CommandLine(int argc, char const * const * argv):
 			cmdType(CmdType::eNone),
+			litterSize(0),
 			options(0)
 	{
 		using namespace std::string_view_literals;
@@ -218,7 +259,7 @@ namespace xorinator::cli {
 					if(argvxx[cursor] == "--"sv) {
 						literal = true;
 					}
-					else if(! check_option(argvxx, cursor, rngKeysDynV, options)) {
+					else if(! check_option(argvxx, cursor, rngKeysDynV, options, litterSize)) {
 						/* If ::check_option returns `true`, then `cursor`, `rngKeysDynV` and
 						 * `cursor` are modified by said function. */
 						argsDynV.push_back(std::string(argvxx[cursor]));

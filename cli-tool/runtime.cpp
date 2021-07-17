@@ -164,7 +164,7 @@ namespace {
 		static_assert(! std::numeric_limits<uint_t>::is_signed);
 		uint_t r = 0;
 		for(unsigned i=0; i < (sizeof(uint_t) / sizeof(byte_t)); ++i) {
-			r = r | rng();
+			r = r | (rng() << (i * std::numeric_limits<byte_t>::digits));
 		}
 		return r;
 	}
@@ -184,6 +184,16 @@ namespace {
 			word = rng();
 		}
 		return RngKey(key);
+	}
+
+
+	/** Check non-fatal semantic errors. */
+	void checkArgumentUsage(const CommandLine& cmdln) {
+		static constexpr std::string_view pre = "Warning: ";
+		if(cmdln.options & xorinator::cli::OptionBits::eQuiet) return;
+		if((cmdln.cmdType != CmdType::eMultiplex) && (cmdln.litterSize != 0)) {
+			std::cerr << pre << "the \"--litter\" argument has no effect for this subcommand." << std::endl;
+		}
 	}
 
 
@@ -225,8 +235,6 @@ namespace xorinator::runtime {
 	bool runMux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
 
-		checkPaths(cmdln);
-
 		#ifdef XORINATOR_UNIX_PERM_CHECK
 			if(! (cmdln.options & cli::OptionBits::eForce)) {
 				checkFilePermission<04>(cmdln.firstArg);
@@ -234,6 +242,9 @@ namespace xorinator::runtime {
 					checkFilePermission<02>(file); }
 			}
 		#endif
+
+		checkPaths(cmdln);
+		checkArgumentUsage(cmdln);
 
 		auto rndDev = std::random_device();
 		auto muxIn = VirtualInputStream(cmdln.firstArg);
@@ -274,6 +285,20 @@ namespace xorinator::runtime {
 			for(size_t i=0; auto& output : muxOut) {
 				output.get().put(outputBuffer[i++]); }
 		}
+
+		if(cmdln.litterSize > 0) {
+			size_t noLitterIndex = random<size_t>(rng) % muxOut.size();
+			for(size_t i=0; auto& output : muxOut) {
+				using lit_t = decltype(cmdln.litterSize);
+				if((i++) != noLitterIndex) {
+					lit_t litterSize = random<lit_t>(rng) % cmdln.litterSize;
+					for(lit_t i=0; i < litterSize; ++i) {
+						output.get().put(rng());
+					}
+				}
+			}
+		}
+
 		for(auto& output : muxOut) {
 			output.get().flush(); }
 
@@ -284,8 +309,6 @@ namespace xorinator::runtime {
 	bool runDemux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
 
-		checkPaths(cmdln);
-
 		#ifdef XORINATOR_UNIX_PERM_CHECK
 			if(! (cmdln.options & cli::OptionBits::eForce)) {
 				checkFilePermission<02>(cmdln.firstArg);
@@ -293,6 +316,9 @@ namespace xorinator::runtime {
 					checkFilePermission<04>(file); }
 			}
 		#endif
+
+		checkPaths(cmdln);
+		checkArgumentUsage(cmdln);
 
 		auto demuxOut = VirtualOutputStream(cmdln.firstArg);
 		auto demuxIn = StaticVector<VirtualInputStream>(cmdln.variadicArgs.size());
@@ -367,6 +393,7 @@ namespace xorinator::runtime {
 			<< "   -k PASSPHRASE | --key PASSPHRASE  (add a RNG as a one-time pad)\n"
 			<< "   -q | --quiet  (suppress error messages)\n"
 			<< "   -f | --force  (skip permission checks)\n"
+			<< "   -g NUM | --litter NUM  (add red herring bytes when generating one-time pads)\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
 			<< "Aliases for \"demultiplex\": demux, dmx, d" << std::endl;
@@ -377,9 +404,12 @@ namespace xorinator::runtime {
 	bool run(const CommandLine& cmdln) {
 		using namespace std::string_literals;
 		switch(cmdln.cmdType) {
-			case CmdType::eMultiplex:  return runMux(cmdln);
-			case CmdType::eDemultiplex:  return runDemux(cmdln);
-			case CmdType::eNone:  return usage(cmdln);
+			case CmdType::eMultiplex:
+				return runMux(cmdln);
+			case CmdType::eDemultiplex:
+				return runDemux(cmdln);
+			case CmdType::eNone:
+				return usage(cmdln);
 			case CmdType::eError:  default:
 				throw InvalidCommandLineException("invalid subcommand"s);
 		}
