@@ -317,26 +317,22 @@ namespace xorinator::runtime {
 		}
 
 		char inputChar;
-		decltype(demuxIn)::SizeType openInputs = demuxIn.size();
-		while(true /* openInputs > 0 */) {
-			openInputs = 0;
+		while([&]() {
 			byte_t xorSum = 0;
 			for(auto& input : demuxIn) {
 				if(input.get().get(inputChar)) {
 					xorSum = byte_t(inputChar) ^ xorSum;
-					++openInputs;
+				} else {
+					return false;
 				}
 			}
-			if(openInputs > 0) {
-				for(auto& keyIter : rngKeyIterators) {
-					xorSum = xorSum ^ *keyIter;
-					++keyIter;
-				}
-				demuxOut.get().put(xorSum);
-			} else {
-				break;
+			for(auto& keyIter : rngKeyIterators) {
+				xorSum = xorSum ^ *keyIter;
+				++keyIter;
 			}
-		}
+			demuxOut.get().put(xorSum);
+			return true;
+		} ());
 		demuxOut.get().flush();
 
 		return true;

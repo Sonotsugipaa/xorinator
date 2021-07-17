@@ -145,6 +145,31 @@ namespace {
 	}
 
 
+	utest::ResultType test_demux_diff_sizes(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			{ // Create the files
+				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
+				if(! mkFile(os, otpDstPath1, "zyxwvuts_123"))  return utest::ResultType::eNeutral;
+			} { // Run the demultiplex subcommand
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} { // Compare the result
+				static const std::string hardcodedExpect = {
+					char(0x1b),  char(0x1b),  char(0x1b),  char(0x13),
+					char(0x13),  char(0x13),  char(0x13),  char(0x1b) };
+				if(! cmpFile(os, srcCpPath, hardcodedExpect))  return eFailure;
+			}
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+		return eSuccess;
+	}
+
+
 	template<bool muxNotDemux>
 	utest::ResultType test_no_pad(std::ostream& os) {
 		using xorinator::cli::CommandLine;
@@ -253,6 +278,7 @@ int main(int, char**) {
 	batch
 		.run("demux consistency (for pads)", test_pads_demux)
 		.run("demux consistency (for keys)", test_keys_demux)
+		.run("demux with differently sized inputs", test_demux_diff_sizes)
 		.run("not enough outputs (mux)", test_not_enough_pads<true>)
 		.run("not enough outputs (demux)", test_not_enough_pads<false>)
 		.run("no output (mux)", test_no_pad<true>)
