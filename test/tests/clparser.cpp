@@ -95,7 +95,6 @@ namespace {
 		] (std::ostream& os) {
 			try {
 				auto cmdln = xorinator::cli::CommandLine(argv.argc, argv.argv.data());
-				print_cl(os, cmdln);  os << '\n';
 				std::vector<std::string> cmdLnRngKeysDynV;
 				std::vector<std::string> cmdLnVarargsDynV;
 				cmdLnRngKeysDynV.insert(cmdLnRngKeysDynV.begin(), cmdln.rngKeys.begin(), cmdln.rngKeys.end());
@@ -164,24 +163,24 @@ int main(int, char**) {
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
 	constexpr static auto optForce = xorinator::cli::OptionBits::eForce;
 	batch
-		.run("Command line 0", mk_test_cmdln(cmdLines[0],
+		.run("Multiple arguments, --key options", mk_test_cmdln(cmdLines[0],
 			"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
-		.run("Command line 1", mk_test_cmdln(cmdLines[1],
+		.run("Multiple arguments, -q option", mk_test_cmdln(cmdLines[1],
 			"xor", CmdType::eDemultiplex, { }, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
-		.run("Command line 2", mk_test_cmdln(cmdLines[2],
+		.run("No argument, conflated -q and -f options", mk_test_cmdln(cmdLines[2],
 			"xor", CmdType::eDemultiplex, { }, { }, { }, optQuiet | optForce))
-		.run("Command line 3", mk_test_cmdln(cmdLines[3],
+		.run("No argument, --key=abc option", mk_test_cmdln(cmdLines[3],
 			"xor", CmdType::eDemultiplex, { "abc" }, { }, { }, optNone))
-		.run("Command line 4", mk_test_cmdln(cmdLines[4],
+		.run("No argument, -kabc option", mk_test_cmdln(cmdLines[4],
 			"xor", CmdType::eDemultiplex, { "abc" }, { }, { }, optNone))
-		.run("Command line 5", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[5]))
-		.run("Command line 6", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[6]))
-		.run("Command line 7", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[7]))
-		.run("Command line 8", mk_test_cmdln(cmdLines[8],
+		.run("No argument, long invalid option (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[5]))
+		.run("No argument, conflated -f, -q and -k option (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[6]))
+		.run("No argument, multiple invalid conflated options (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[7]))
+		.run("No argument nor option", mk_test_cmdln(cmdLines[8],
 			"xor", CmdType::eMultiplex, { }, "", { }, optNone))
-		.run("Command line 9", mk_test_cmdln(cmdLines[9],
+		.run("Unrecognized subcommand", mk_test_cmdln(cmdLines[9],
 			"xor", CmdType::eError, { }, "", { }, optNone))
-		.run("Command line 10", mk_test_cmdln(cmdLines[10],
+		.run("Nothing", mk_test_cmdln(cmdLines[10],
 			"xor", CmdType::eNone, { }, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }
