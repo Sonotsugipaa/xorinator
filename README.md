@@ -28,6 +28,19 @@ The executable file is `build-Release/cli-tool/xor`. In order to install it, eit
 cmake --install build-Release
 ```
 
+#### On Arch Linux (and derivates)
+
+Xorinator has an [AUR package](https://aur.archlinux.org/packages/xorinator/). In order to install it:
+- Clone the AUR repository
+  - `git clone https://aur.archlinux.org/xorinator.git`
+- Enter the repository and build the package (the `core-devel` package group is required)
+  - `cd xorinator && makepkg`
+- Manually install the package
+  - `pacman -U xorinator-*.pkg.tar.zst`
+
+Alternatively, use the following one-liner:  
+`(git clone 'https://aur.archlinux.org/xorinator.git' && cd xorinator && makepkg -i)`
+
 ## Usage
 
 Xorinator provides a command-line tool as an executable file, `xor` (or `xor.exe`, for NT-based systems).
