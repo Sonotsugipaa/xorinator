@@ -74,14 +74,14 @@ namespace {
 				}
 				uid_t prUid = geteuid();
 				gid_t prGid = getegid();
-				mode_t offset = 0;
+				mode_t offset = 6;
 				if(statResult.st_uid != prUid) {
 					if(statResult.st_gid == prGid)
 						offset = 3;
 					else
-						offset = 6;
+						offset = 0;
 				}
-				if(! (statResult.st_mode & (04 << offset))) {
+				if(! (statResult.st_mode & (rwxBit << offset))) {
 					throw xorinator::runtime::FilePermissionException(
 						"user doesn't have " + std::string(rwxString<rwxBit>) +
 						" permissions for \"" + path + '"');
