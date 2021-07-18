@@ -45,6 +45,7 @@ namespace {
 	const std::string message = "rcompat\n";
 	const std::string expectedExceptionMsg = "Expected an exception, none thrown";
 
+
 	bool mkFile(std::ostream& os, const std::string& path, const std::string& content) {
 		try {
 			auto file = std::ofstream(path);
@@ -121,6 +122,7 @@ namespace {
 	};
 
 
+	/** Expect a command with only one pad, either for multiplexing or demultiplexing, to fail. */
 	template<bool muxNotDemux>
 	utest::ResultType test_not_enough_pads(std::ostream& os) {
 		using xorinator::cli::CommandLine;
@@ -145,6 +147,34 @@ namespace {
 	}
 
 
+	/** Expect two files with different sizes to demux into a file with
+	 * the smallest input file's size. */
+	utest::ResultType test_demux_diff_sizes(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			{ // Create the files
+				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
+				if(! mkFile(os, otpDstPath1, "zyxwvuts_123"))  return utest::ResultType::eNeutral;
+			} { // Run the demultiplex subcommand
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} { // Compare the result
+				static const std::string hardcodedExpect = {
+					char(0x1b),  char(0x1b),  char(0x1b),  char(0x13),
+					char(0x13),  char(0x13),  char(0x13),  char(0x1b) };
+				if(! cmpFile(os, srcCpPath, hardcodedExpect))  return eFailure;
+			}
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+		return eSuccess;
+	}
+
+
+	/** Expect a command with only one non-option argument to fail. */
 	template<bool muxNotDemux>
 	utest::ResultType test_no_pad(std::ostream& os) {
 		using xorinator::cli::CommandLine;
@@ -169,6 +199,11 @@ namespace {
 	}
 
 
+	/** Expect a demultiplexing operation to run successfully and produce the
+	 * correct output when using --key arguments. This test should fail if
+	 * the deterministic algorithm for generating one-time pads from strings
+	 * changes, therefore breaking retrocompatibility, therefore causing
+	 * previously multiplexed files to be lost. */
 	utest::ResultType test_keys_demux(std::ostream& os) {
 		using xorinator::cli::CommandLine;
 		try {
@@ -194,15 +229,26 @@ namespace {
 	}
 
 
+	/** Expect a file to be multiplexed, then demultiplexed,
+	 * finally ending up with an exact copy of itself. */
+	template<size_t litter>
 	utest::ResultType test_mux_demux(std::ostream& os) {
 		using xorinator::cli::CommandLine;
 		try {
 			{ // Create the file
 				if(! mkFile(os, srcPath, message))  return utest::ResultType::eNeutral;
 			} { // Run the multiplex subcommand
-				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
-					return eFailure;
+				if constexpr(litter == 0) {
+					std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+						return eFailure;
+					}
+				} else {
+					std::string litterArg = "--litter=" + std::to_string(litter);
+					std::array<const char*, 6> argv = { "xor", "mux", litterArg.c_str(), srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+						return eFailure;
+					}
 				}
 			} { // Run the demultiplex subcommand
 				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
@@ -220,6 +266,9 @@ namespace {
 	}
 
 
+	/** Expect a demultiplexing operation to match a hardcoded result: this test
+	 * should fail if retrocompatibility is broken (even if multiplexing and
+	 * demultiplexing operations are literally just bitwise XOR operations). */
 	utest::ResultType test_pads_demux(std::ostream& os) {
 		using xorinator::cli::CommandLine;
 		try {
@@ -251,12 +300,14 @@ namespace {
 int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	batch
-		.run("demux consistency (for pads)", test_pads_demux)
-		.run("demux consistency (for keys)", test_keys_demux)
-		.run("not enough outputs (mux)", test_not_enough_pads<true>)
-		.run("not enough outputs (demux)", test_not_enough_pads<false>)
-		.run("no output (mux)", test_no_pad<true>)
-		.run("no output (demux)", test_no_pad<false>)
-		.run("mux & demux", test_mux_demux);
+		.run("Demux consistency (for pads)", test_pads_demux)
+		.run("Demux consistency (for keys)", test_keys_demux)
+		.run("Demux with differently sized inputs", test_demux_diff_sizes)
+		.run("Not enough outputs (mux)", test_not_enough_pads<true>)
+		.run("Not enough outputs (demux)", test_not_enough_pads<false>)
+		.run("No output (mux)", test_no_pad<true>)
+		.run("No output (demux)", test_no_pad<false>)
+		.run("Mux & demux", test_mux_demux<0>)
+		.run("Mux & demux (--litter=64)", test_mux_demux<64>);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

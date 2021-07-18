@@ -35,18 +35,6 @@ namespace {
 	constexpr auto eSuccess = utest::ResultType::eSuccess;
 
 
-	std::string letterize(const std::string& binaryStr) {
-		static_assert('Z' > 'A');
-		std::string r;  r.reserve(binaryStr.size());
-		for(size_t i=0; i < binaryStr.size(); ++i) {
-			auto value = static_cast<unsigned>(binaryStr[i]);
-			value = (value % ('Z' - 'A')) + 'A';
-			r.push_back(value);
-		}
-		return r;
-	}
-
-
 	template<typename KeyView>
 	std::string key_to_str(const KeyView& kv) {
 		std::string r;
@@ -56,8 +44,8 @@ namespace {
 	}
 
 
-	template<uint64_t k1, uint64_t k2, unsigned bytes_beg, unsigned bytes_end, bool eq, bool print>
-	utest::ResultType test_rng64_to_rng64(std::ostream& os) {
+	template<uint64_t k1, uint64_t k2, unsigned bytes_beg, unsigned bytes_end, bool eq>
+	utest::ResultType test_rng64_to_rng64(std::ostream&) {
 		std::string str1, str2;
 		{
 			auto rngKey = xorinator::RngKey<64>({ k1 });
@@ -68,14 +56,12 @@ namespace {
 			auto rngKeyView = rngKey.view(bytes_beg, bytes_end);
 			str2 = key_to_str(rngKeyView);
 		}
-		if constexpr(print) {
-			os << "Key 1: " << letterize(str1) << "\nKey 2: " << letterize(str2) << std::endl; }
 		return (str1 == str2) == eq? eSuccess : eFailure;
 	}
 
 
-	template<uint64_t k, unsigned bytes_beg, unsigned bytes_end, bool eq, bool print>
-	utest::ResultType test_rng64_to_rng128(std::ostream& os) {
+	template<uint64_t k, unsigned bytes_beg, unsigned bytes_end, bool eq>
+	utest::ResultType test_rng64_to_rng128(std::ostream&) {
 		std::string str1, str2;
 		{
 			auto rngKey = xorinator::RngKey<64>({ k });
@@ -86,14 +72,12 @@ namespace {
 			auto rngKeyView = rngKey.view(bytes_beg, bytes_end);
 			str2 = key_to_str(rngKeyView);
 		}
-		if constexpr(print) {
-			os << "Key 1: " << letterize(str1) << "\nKey 2: " << letterize(str2) << std::endl; }
 		return (str1 == str2) == eq? eSuccess : eFailure;
 	}
 
 
-	template<uint64_t k1, uint64_t k2, unsigned bytes_beg, unsigned bytes_end, bool eq, bool print>
-	utest::ResultType test_rng128_to_rng128(std::ostream& os) {
+	template<uint64_t k1, uint64_t k2, unsigned bytes_beg, unsigned bytes_end, bool eq>
+	utest::ResultType test_rng128_to_rng128(std::ostream&) {
 		std::string str1, str2;
 		{
 			auto rngKey = xorinator::RngKey<128>({ k1, k1+1 });
@@ -104,8 +88,6 @@ namespace {
 			auto rngKeyView = rngKey.view(bytes_beg, bytes_end);
 			str2 = key_to_str(rngKeyView);
 		}
-		if constexpr(print) {
-			os << "Key 1: " << letterize(str1) << "\nKey 2: " << letterize(str2) << std::endl; }
 		return (str1 == str2) == eq? eSuccess : eFailure;
 	}
 
@@ -196,13 +178,13 @@ int main(int, char**) {
 	constexpr unsigned LONG_CHARS = 4096*4;
 	auto batch = utest::TestBatch(std::cout);
 	batch
-		.run("789a.0x40 == 789a.0x40", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, SHORT_CHARS, true, true>)
-		.run("4321.0x40 != 789a.0x40", test_rng64_to_rng64<0xa987654321, 0x123456789a, 0, SHORT_CHARS, false, true>)
-		.run("4321.0x40 == 4321.0x40 (offset)", test_rng64_to_rng64<0xa987654321, 0xa987654321, 3, 3+SHORT_CHARS, true, true>)
-		.run("789a.0x40 == 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, LONG_CHARS, true, false>)
-		.run("4321.0x40 != 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0xa987654321, 0, LONG_CHARS, false, false>)
-		.run("4321.0x80 == 4321.0x80", test_rng128_to_rng128<0xa987654321, 0xa987654321, 0, SHORT_CHARS, true, true>)
-		.run("4321.0x40 != 4321.0x80", test_rng64_to_rng128<0xa987654321, 0, SHORT_CHARS, false, true>)
+		.run("789a.0x40 == 789a.0x40", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, SHORT_CHARS, true>)
+		.run("4321.0x40 != 789a.0x40", test_rng64_to_rng64<0xa987654321, 0x123456789a, 0, SHORT_CHARS, false>)
+		.run("4321.0x40 == 4321.0x40 (offset)", test_rng64_to_rng64<0xa987654321, 0xa987654321, 3, 3+SHORT_CHARS, true>)
+		.run("789a.0x40 == 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0x123456789a, 0, LONG_CHARS, true>)
+		.run("4321.0x40 != 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0xa987654321, 0, LONG_CHARS, false>)
+		.run("4321.0x80 == 4321.0x80", test_rng128_to_rng128<0xa987654321, 0xa987654321, 0, SHORT_CHARS, true>)
+		.run("4321.0x40 != 4321.0x80", test_rng64_to_rng128<0xa987654321, 0, SHORT_CHARS, false>)
 		.run("Deterministic key from string", test_rngkey512)
 		.run("File key", test_filekey);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;

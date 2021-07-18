@@ -69,6 +69,13 @@ A possible use case on a Unix-like system is when the user attempts to write to 
 
 Using the `--force` option does not grant access to files owned by other users on any system.
 
+#### `--litter NUM`
+
+When performing multiplexing operations, the "`--litter NUM`" option causes up to `NUM` additional random characters to be written at the end of each output file (except one).
+
+This is useful to hide the fact that all one-time pads have the same size as the original message.  
+After a demultiplexing operation, the reconstructed message will be as big as the smallest input.
+
 ### Examples
 
 ```bash
