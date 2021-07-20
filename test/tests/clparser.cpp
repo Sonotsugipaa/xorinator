@@ -140,6 +140,34 @@ namespace {
 	}
 
 
+	auto test_literal(std::ostream& os) {
+		using namespace xorinator;
+		try {
+			auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-f", "--", "-f" };
+			auto cmdln = cli::CommandLine(argv.size(), argv.data());
+			std::vector<std::string> cmdLnRngKeysDynV;
+			std::vector<std::string> cmdLnVarargsDynV;
+			cmdLnRngKeysDynV.insert(cmdLnRngKeysDynV.begin(), cmdln.rngKeys.begin(), cmdln.rngKeys.end());
+			cmdLnVarargsDynV.insert(cmdLnVarargsDynV.begin(), cmdln.variadicArgs.begin(), cmdln.variadicArgs.end());
+			bool success = true;
+			#define CHECK_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch\n"; success = false; }
+			#define CHECK_PR_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch (expected '" << (EXPECT_) << "', got '" << (GOT_) << "')\n"; success = false; }
+				CHECK_   (cli::CmdType::eMultiplex,           cmdln.cmdType,     "command type");
+				CHECK_   (cli::OptionBits::eForce,            cmdln.options,     "options");
+				CHECK_   (std::vector<std::string>(),         cmdLnRngKeysDynV,  "rng keys");
+				CHECK_PR_("xor",                              cmdln.zeroArg,     "zero argument");
+				CHECK_PR_("arg0",                             cmdln.firstArg,    "first argument");
+				CHECK_   (std::vector<std::string> { "-f" },  cmdLnVarargsDynV,  "variadic arguments");
+			#undef CHECK_
+			os << std::flush;
+			return success? eSuccess : eFailure;
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+	}
+
+
 	const auto cmdLines = std::array<DynArgv, 11> {
 		DynArgv { "xor", "mux", "--key", "1234", "in.txt", "-k", "5678", "out.1.txt", "out.2.txt", "--key", "9abc" },
 		DynArgv { "xor", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
@@ -163,6 +191,7 @@ int main(int, char**) {
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
 	constexpr static auto optForce = xorinator::cli::OptionBits::eForce;
 	batch
+		.run("Command with literal argument marker", test_literal)
 		.run("Multiple arguments, --key options", mk_test_cmdln(cmdLines[0],
 			"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
 		.run("Multiple arguments, -q option", mk_test_cmdln(cmdLines[1],

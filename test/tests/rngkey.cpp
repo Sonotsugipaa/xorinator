@@ -120,55 +120,6 @@ namespace {
 		return eSuccess;
 	}
 
-
-	utest::ResultType test_filekey(std::ostream& os) {
-		using namespace std::string_literals;
-		const static std::string keyStr = "deterministic key"s;
-		const static std::string filename = "test_tmpfile"s;
-		const static size_t offset = 2;
-		xorinator::FullKey ramKey = keyStr;
-		try {
-			{ // Create the temporary file in the cwd
-				auto file = std::ofstream(filename);
-				file << keyStr;
-			} { // Read the file and test on it
-				auto file = std::ifstream(filename);
-				auto fileKey = xorinator::StreamKey(file);
-				auto fileKeyView = fileKey.view(0, keyStr.size());
-				auto ramKeyView = ramKey.view(0, keyStr.size());
-				{ // Print the keys, then reset the views with an arbitrary offset
-					os
-						<< "String key: \"" << key_to_str(ramKeyView) << "\"\n"
-						<< "File key: \"" << key_to_str(fileKeyView) << '"' << std::endl;
-					fileKeyView = fileKey.view(offset, keyStr.size());
-					ramKeyView = ramKey.view(offset, keyStr.size());
-				}
-				auto fileIter = fileKeyView.begin();
-				auto fileEnd = fileKeyView.end();
-				auto ramIter = ramKeyView.begin();
-				auto ramEnd = ramKeyView.end();
-				size_t pos = 0;
-				while((fileIter != fileEnd) && (ramIter != ramEnd)) {
-					auto fileIterValue = *fileIter;
-					auto ramIterValue = *ramIter;
-					if(fileIterValue != ramIterValue) {
-						os
-							<< "File/string key mistmatch at " << offset << '+' << pos << ": (file) "
-							<< static_cast<unsigned>(fileIterValue) << " vs (string) "
-							<< static_cast<unsigned>(ramIterValue) << std::endl;
-						return eFailure;
-					}
-					++pos;
-					++fileIter;  ++ramIter;
-				}
-			}
-		} catch(std::exception& ex) {
-			os << "Exception: " << ex.what() << std::endl;
-			return eFailure;
-		}
-		return eSuccess;
-	}
-
 }
 
 
@@ -185,7 +136,6 @@ int main(int, char**) {
 		.run("4321.0x40 != 789a.0x40 (long)", test_rng64_to_rng64<0x123456789a, 0xa987654321, 0, LONG_CHARS, false>)
 		.run("4321.0x80 == 4321.0x80", test_rng128_to_rng128<0xa987654321, 0xa987654321, 0, SHORT_CHARS, true>)
 		.run("4321.0x40 != 4321.0x80", test_rng64_to_rng128<0xa987654321, 0, SHORT_CHARS, false>)
-		.run("Deterministic key from string", test_rngkey512)
-		.run("File key", test_filekey);
+		.run("Deterministic key from string", test_rngkey512);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

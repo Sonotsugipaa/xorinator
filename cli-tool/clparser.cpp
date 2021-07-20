@@ -231,6 +231,7 @@ namespace xorinator::cli {
 	CommandLine::CommandLine():
 			cmdType(CmdType::eNone),
 			litterSize(0),
+			firstLiteralArg(1),
 			options(OptionBits::eNone)
 	{ }
 
@@ -238,6 +239,7 @@ namespace xorinator::cli {
 	CommandLine::CommandLine(int argc, char const * const * argv):
 			cmdType(CmdType::eNone),
 			litterSize(0),
+			firstLiteralArg(argc + 1),
 			options(0)
 	{
 		using namespace std::string_view_literals;
@@ -258,6 +260,7 @@ namespace xorinator::cli {
 				} else {
 					if(argvxx[cursor] == "--"sv) {
 						literal = true;
+						firstLiteralArg = argsDynV.size();
 					}
 					else if(! check_option(argvxx, cursor, rngKeysDynV, options, litterSize)) {
 						/* If ::check_option returns `true`, then `cursor`, `rngKeysDynV` and
