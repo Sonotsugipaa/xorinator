@@ -158,6 +158,10 @@ namespace xorinator::cli {
 		StaticVector<std::string> rngKeys;
 		/** Maximum amount of random surplus data written by multiplexing operations. */
 		size_t litterSize;
+		/** First argument that follows the literal argument marker (`--`).
+		 * If the literal marker is not present, `firstLiteralArg` is
+		 * arbitrarily higher than the argument count. */
+		size_t firstLiteralArg;
 		/** Unary option arguments. */
 		Options options;
 

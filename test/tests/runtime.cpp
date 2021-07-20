@@ -129,18 +129,21 @@ namespace {
 		try {
 			if constexpr(muxNotDemux) {
 				std::array<const char*, 4> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str() };
-				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} else {
 				std::array<const char*, 4> argv = { "xor", "dmx", srcPath.c_str(), otpDstPath0.c_str() };
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			}
 		} catch(xorinator::cli::InvalidCommandLineException& ex) {
-			os << "InvalidCommandLineException: " << ex.what() << std::endl;
 			return eSuccess;
+		} catch(std::exception& ex) {
+			os << "std::exception: " << ex.what() << std::endl;
+		} catch(...) {
+			os << "An unknown exception was thrown" << std::endl;
 		}
 		os << expectedExceptionMsg << std::endl;
 		return eFailure;
@@ -157,7 +160,7 @@ namespace {
 				if(! mkFile(os, otpDstPath1, "zyxwvuts_123"))  return utest::ResultType::eNeutral;
 			} { // Run the demultiplex subcommand
 				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} { // Compare the result
@@ -181,18 +184,21 @@ namespace {
 		try {
 			if constexpr(muxNotDemux) {
 				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), "-k1234", "-k5678" };
-				if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} else {
 				std::array<const char*, 5> argv = { "xor", "dmx", srcPath.c_str(), "-k1234", "-k5678" };
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			}
 		} catch(xorinator::cli::InvalidCommandLineException& ex) {
-			os << "InvalidCommandLineException: " << ex.what() << std::endl;
 			return eSuccess;
+		} catch(std::exception& ex) {
+			os << "std::exception: " << ex.what() << std::endl;
+		} catch(...) {
+			os << "An unknown exception was thrown" << std::endl;
 		}
 		os << expectedExceptionMsg << std::endl;
 		return eFailure;
@@ -212,7 +218,7 @@ namespace {
 				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
 			} { // Run the multiplex subcommand
 				std::array<const char*, 6> argv = { "xor", "dmx", "-k1234", "-klaks", srcCpPath.c_str(), otpDstPath0.c_str()};
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} { // Compare the result    a208 7f37 2d29 71de
@@ -240,19 +246,19 @@ namespace {
 			} { // Run the multiplex subcommand
 				if constexpr(litter == 0) {
 					std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+					if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 						return eFailure;
 					}
 				} else {
 					std::string litterArg = "--litter=" + std::to_string(litter);
 					std::array<const char*, 6> argv = { "xor", "mux", litterArg.c_str(), srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-					if(! xorinator::runtime::runMux(CommandLine(argv.size(), argv.data()))) {
+					if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 						return eFailure;
 					}
 				}
 			} { // Run the demultiplex subcommand
 				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} { // Compare the files
@@ -277,7 +283,7 @@ namespace {
 				if(! mkFile(os, otpDstPath1, "zyxwvuts"))  return utest::ResultType::eNeutral;
 			} { // Run the demultiplex subcommand
 				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
-				if(! xorinator::runtime::runDemux(CommandLine(argv.size(), argv.data()))) {
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} { // Compare the result
