@@ -99,6 +99,81 @@ namespace {
 	#endif
 
 
+	/** A std::ifstream / std::ofstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
+	template<typename stream_t, typename file_stream_t>
+	class StreamAdapter {
+	private:
+		constexpr static bool isInputStream = std::is_same_v<stream_t, std::istream>;
+		constexpr static bool isOutputStream = std::is_same_v<stream_t, std::ostream>;
+		static_assert(isInputStream || isOutputStream);
+		static_assert((! isInputStream) || std::is_same_v<file_stream_t, std::ifstream>);
+		static_assert((! isOutputStream) || std::is_same_v<file_stream_t, std::ofstream>);
+
+		stream_t* stream_;
+		bool preallocated_;
+
+	public:
+		using Native = stream_t;
+
+		StreamAdapter(): stream_(nullptr), preallocated_(false) { }
+
+		StreamAdapter(stream_t& ref): stream_(&ref), preallocated_(true) { }
+
+		StreamAdapter(const std::string& path, bool noStdIo) {
+			if(noStdIo || (path != "-")) {
+				preallocated_ = false;
+				stream_ = new file_stream_t(path, std::ios_base::binary);
+			} else {
+				preallocated_ = true;
+				if constexpr(isInputStream) { stream_ = &std::cin; }
+				else if constexpr(isOutputStream) { stream_ = &std::cout; }
+				else { assert(false && "this assertion shouldn't ever be reachable"); }
+			}
+		}
+
+		~StreamAdapter() {
+			if(stream_ != nullptr) {
+				if(! preallocated_)  delete stream_;
+				stream_ = nullptr;
+			}
+		}
+
+		StreamAdapter(StreamAdapter&& mv):
+				stream_(std::move(mv.stream_)),
+				preallocated_(std::move(mv.preallocated_))
+		{
+			mv.stream_ = nullptr;
+		}
+
+		StreamAdapter& operator=(StreamAdapter&& mv) {
+			this->~StreamAdapter();
+			new (this) StreamAdapter(std::move(mv));
+			return *this;
+		}
+
+		stream_t& get() { return *stream_; }
+		const stream_t& get() const { return *stream_; }
+
+		stream_t& operator*() { return get(); }
+		const stream_t& operator*() const { return get(); }
+
+		stream_t& operator->() { return get(); }
+		const stream_t& operator->() const { return get(); }
+
+		operator stream_t&() { return get(); }
+		operator const stream_t&() const { return get(); }
+	};
+
+	/** A std::ifstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
+	using InputStreamAdapter = StreamAdapter<std::istream, std::ifstream>;
+
+	/** A std::ofstream wrapper, that replaces the stream when
+	 * constructed from the path "-". */
+	using OutputStreamAdapter = StreamAdapter<std::ostream, std::ofstream>;
+
+
 	class RngAdapter {
 	private:
 		using rtype = Rng::result_type;
@@ -243,12 +318,13 @@ namespace xorinator::runtime {
 			}
 		#endif
 
+		assert(cmdln.cmdType == cli::CmdType::eMultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
 
 		auto rndDev = std::random_device();
-		auto muxIn = VirtualInputStream(cmdln.firstArg);
-		auto muxOut = StaticVector<VirtualOutputStream>(cmdln.variadicArgs.size());
+		auto muxIn = InputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
+		auto muxOut = StaticVector<OutputStreamAdapter>(cmdln.variadicArgs.size());
 		auto outputBuffer = StaticVector<byte_t>(muxOut.size());
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
@@ -265,7 +341,7 @@ namespace xorinator::runtime {
 
 		muxIn.get().exceptions(std::ios_base::badbit);
 		for(unsigned i=0; const std::string& path : cmdln.variadicArgs) {
-			muxOut[i] = path;
+			muxOut[i] = OutputStreamAdapter(path, cmdln.firstLiteralArg <= (i+1));
 			muxOut[i].get().exceptions(std::ios_base::badbit);
 			++i;
 		}
@@ -317,11 +393,12 @@ namespace xorinator::runtime {
 			}
 		#endif
 
+		assert(cmdln.cmdType == cli::CmdType::eDemultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
 
-		auto demuxOut = VirtualOutputStream(cmdln.firstArg);
-		auto demuxIn = StaticVector<VirtualInputStream>(cmdln.variadicArgs.size());
+		auto demuxOut = OutputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
+		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size());
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
 		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
@@ -337,7 +414,7 @@ namespace xorinator::runtime {
 
 		demuxOut.get().exceptions(std::ios_base::badbit);
 		for(size_t i=0; const std::string& path : cmdln.variadicArgs) {
-			demuxIn[i] = path;
+			demuxIn[i] = InputStreamAdapter(path, cmdln.firstLiteralArg <= (i+1));
 			demuxIn[i].get().exceptions(std::ios_base::badbit);
 			++i;
 		}

@@ -128,7 +128,6 @@ namespace {
 				os << "No exception thrown" << std::endl;
 				return eFailure;
 			} catch(Exception& ex) {
-				os << "Exception: " << ex.what() << std::endl;
 				return eSuccess;
 			} catch(std::exception& ex) {
 				os << "Exception: " << ex.what() << std::endl;
@@ -140,7 +139,41 @@ namespace {
 	}
 
 
-	auto test_literal(std::ostream& os) {
+	template<bool useLiteral>
+	auto test_literal_pos(std::ostream& os) {
+		using namespace xorinator;
+		try {
+			if constexpr(useLiteral) {
+				constexpr unsigned expect = 1;
+				auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-f", "--", "-f" };
+				auto cmdln = cli::CommandLine(argv.size(), argv.data());
+				if(cmdln.firstLiteralArg != 1) {
+					os
+						<< "first literal argument is " << cmdln.firstLiteralArg
+						<< ", but it should be " << expect << '\n';
+					return eFailure;
+				}
+			} else {
+				auto argv = std::array<const char*, 5> { "xor", "mux", "arg0", "-f", "arg" };
+				auto cmdln = cli::CommandLine(argv.size(), argv.data());
+				unsigned expectHigherThan = argv.size();
+				if(cmdln.firstLiteralArg <= expectHigherThan) {
+					os
+						<< "first literal argument is " << cmdln.firstLiteralArg
+						<< ", but it should be > " << expectHigherThan << '\n';
+					return eFailure;
+				}
+			}
+			os << std::flush;
+			return eSuccess;
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+	}
+
+
+	auto test_literal_cmd(std::ostream& os) {
 		using namespace xorinator;
 		try {
 			auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-f", "--", "-f" };
@@ -191,7 +224,9 @@ int main(int, char**) {
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
 	constexpr static auto optForce = xorinator::cli::OptionBits::eForce;
 	batch
-		.run("Command with literal argument marker", test_literal)
+		.run("Command with literal argument marker (syntax)", test_literal_cmd)
+		.run("Command with literal argument marker (first argument)", test_literal_pos<true>)
+		.run("Command with literal argument marker (absent)", test_literal_pos<false>)
 		.run("Multiple arguments, --key options", mk_test_cmdln(cmdLines[0],
 			"xor", CmdType::eMultiplex, { "1234", "5678", "9abc" }, "in.txt", { "out.1.txt", "out.2.txt" }, optNone))
 		.run("Multiple arguments, -q option", mk_test_cmdln(cmdLines[1],

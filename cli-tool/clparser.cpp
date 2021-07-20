@@ -260,7 +260,9 @@ namespace xorinator::cli {
 				} else {
 					if(argvxx[cursor] == "--"sv) {
 						literal = true;
-						firstLiteralArg = argsDynV.size();
+						// argsDynV.size() may return 0 at this point
+						if(argsDynV.size() > 0)  firstLiteralArg = argsDynV.size() - 1;
+						else  firstLiteralArg = 0;
 					}
 					else if(! check_option(argvxx, cursor, rngKeysDynV, options, litterSize)) {
 						/* If ::check_option returns `true`, then `cursor`, `rngKeysDynV` and
