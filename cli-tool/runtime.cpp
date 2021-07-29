@@ -47,7 +47,8 @@ using RngKey = xorinator::RngKey<512>;
 
 namespace {
 
-	constexpr unsigned RNG_RESET_AFTER = 512; // Reset a RNG after X bytes
+	/** Reset a RngAdapter instance after RNG_RESET_AFTER bytes. */
+	constexpr size_t RNG_RESET_AFTER = 4096 * sizeof(std::random_device::result_type);
 
 
 	#ifdef XORINATOR_UNIX_PERM_CHECK
@@ -201,14 +202,24 @@ namespace {
 			return r;
 		}
 
-	public:
-		static std::random_device mkRandomDevice() {
+		Rng initRng_() {
+			constexpr size_t seedSizeBytes = 32;
+			constexpr size_t seedSizeDtype = seedSizeBytes / sizeof(dtype);
+			static_assert(seedSizeDtype % sizeof(dtype) == 0);
+			std::array<dtype, seedSizeDtype> seedData;
+			for(auto& drnd : seedData)  drnd = rndDev_();
+			auto seedSeq = std::seed_seq(seedData.begin(), seedData.end());
+			return Rng(seedSeq);
+		}
+
+		static std::random_device mkRandomDevice_() {
 			return std::random_device();
 		}
 
+	public:
 		RngAdapter():
-				rndDev_(),
-				rng_(rndDev_()),
+				rndDev_(mkRandomDevice_()),
+				rng_(initRng_()),
 				rngState_(rng_()),
 				rngStateByteIndex_(0),
 				rndDevByteIndex_(0),
