@@ -60,9 +60,11 @@ Multiple options can be used anywhere in the argument list, unless the `--` argu
 The option syntax partially follows the POSIX convention:
 - unary short options may be conflated into a single argument (e.g. "`-abc`" instead of "`-a -b -c`");
 - binary short options may have their values directly after the second character (e.g. "`-kPassphrase`" instead of "`-k Passphrase`");
-- binary long options may have their key and value in the same argument, with a "`=`" separating the two (e.g. "`--key=pass`" instead of "`--key pass`").
+- binary long options may have their key and value in the same argument, with a "`=`" separating the two (e.g. "`--litter=4096`" instead of "`--litter 4096`").
 
 #### `--key PASSPHRASE`
+
+**This option is unsafe and deprecated, and will be removed in the future.**
 
 Each `--key` option will add a passphrase to the (de)multiplexing operation: from this passphrase `xor` generates a (cryptographically weak) hash, which will be used as a seed to generate an additional OTP.
 
@@ -72,7 +74,7 @@ Passphrase-generated OTPs are not real OTPs, since they offer less information e
 
 #### `--quiet`
 
-Suppress error messages that may result from incorrect input (e.g. `xor --key [EOL]`) or from runtime errors (e.g. upon opening an unreadable file).
+Suppress error messages that may result from incorrect input (e.g. `xor mux -`) or from runtime errors (e.g. upon opening an unreadable file).
 
 #### `--force`
 

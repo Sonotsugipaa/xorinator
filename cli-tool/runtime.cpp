@@ -305,6 +305,20 @@ namespace {
 	}
 
 
+	/** If the command line contains `--key` arguments, warn the user
+	 * that they are deprecated. */
+	void tryWarnRngKeyDeprecated(const CommandLine& cmdln) {
+		if(
+				(! cmdln.options & xorinator::cli::OptionBits::eQuiet) &&
+				(! cmdln.rngKeys.empty())
+		) {
+			std::cerr <<
+				"Warning: \"--key\" arguments are unsafe AND deprecated;"
+				" using them is discouraged.\n" << std::flush;
+		}
+	}
+
+
 	/** Check non-fatal semantic errors. */
 	void checkArgumentUsage(const CommandLine& cmdln) {
 		static constexpr std::string_view pre = "Warning: ";
@@ -364,6 +378,7 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eMultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
+		tryWarnRngKeyDeprecated(cmdln);
 
 		auto rndDev = std::random_device();
 		auto muxIn = InputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
@@ -439,6 +454,7 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eDemultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
+		tryWarnRngKeyDeprecated(cmdln);
 
 		auto demuxOut = OutputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
 		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size());
