@@ -31,8 +31,6 @@
 	}
 #endif
 
-#include <xorinator.hpp>
-
 #include "runtime.hpp"
 
 using xorinator::cli::CommandLine;

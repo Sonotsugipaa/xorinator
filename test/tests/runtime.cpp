@@ -20,7 +20,6 @@
 
 #include <test_tools.hpp>
 
-#include <xorinator.hpp>
 #include <cli-tool/clparser.hpp>
 #include <cli-tool/runtime.hpp>
 

@@ -20,7 +20,7 @@
 
 #include <test_tools.hpp>
 
-#include <xorinator.hpp>
+#include <cli-tool/runtime.hpp>
 
 #include <iostream>
 #include <fstream>
