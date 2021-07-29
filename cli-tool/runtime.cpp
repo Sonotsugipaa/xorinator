@@ -60,6 +60,33 @@ namespace {
 		template<> std::string_view rwxString<02> = "write";
 		template<> std::string_view rwxString<04> = "read";
 
+		bool processHasGroup(gid_t fGid) {
+			constexpr auto allocGroups = [](size_t size) {
+				return reinterpret_cast<gid_t*>(operator new[](size * sizeof(gid_t)));
+			};
+			size_t bufferSize = 16;
+			gid_t* groups = allocGroups(bufferSize);
+			auto groupn = ::getgroups(bufferSize, groups);
+			while(errno != 0) {
+				assert(errno == EINVAL);
+				assert(bufferSize <= (NGROUPS_MAX / 2));
+				errno = 0;
+				operator delete[](groups);
+				bufferSize *= 2;
+				groups = allocGroups(bufferSize);
+				groupn = ::getgroups(bufferSize, groups);
+			}
+			#ifndef NDEBUG
+				/* Apparently the documentation for ::getgroups doesn't specify
+				 * whether the group IDs are ordered, but anecdotal evidence
+				 * suggests so. */
+				for(size_t i=1; i < groupn; ++i)  assert(groups[i-1] <= groups[i]);
+			#endif
+			bool r = std::binary_search(groups, groups + groupn, fGid);
+			operator delete[](groups);
+			return r;
+		}
+
 		template<mode_t rwxBit>
 		void checkFilePermission(const std::string& path) {
 			static_assert(S_IRUSR == 0400);
@@ -75,14 +102,16 @@ namespace {
 				}
 				uid_t prUid = geteuid();
 				gid_t prGid = getegid();
-				mode_t offset = 6;
-				if(statResult.st_uid != prUid) {
-					if(statResult.st_gid == prGid)
-						offset = 3;
-					else
-						offset = 0;
+				mode_t perm;
+				if(statResult.st_uid == prUid) {
+					perm = (statResult.st_mode >> 6) & 0007;
+				} else
+				if((statResult.st_gid == prGid) || (processHasGroup(statResult.st_gid))) {
+					perm = (statResult.st_mode >> 3) & 0007;
+				} else {
+					perm = statResult.st_mode & 0007;
 				}
-				if(! (statResult.st_mode & (rwxBit << offset))) {
+				if(! (perm & rwxBit)) {
 					throw xorinator::runtime::FilePermissionException(
 						"user doesn't have " + std::string(rwxString<rwxBit>) +
 						" permissions for \"" + path + '"');
