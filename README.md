@@ -80,7 +80,7 @@ Suppress error messages that may result from incorrect input (e.g. `xor mux -`) 
 
 Skip platform-dependent permission checks.
 
-A possible use case on a Unix-like system is when the user attempts to write to a file, owned by said user but having permission mode `0000`: the system does not actually prevent the user from writing to it, but the file metadata *hints* that the file should not be written to.
+A possible use case on a Linux system is when the root user attempts to write to a file, owned by said user but having permission mode `0000`: the system does not actually prevent the root user from writing to it, but the file metadata *hints* that the file should not be written to.
 
 Using the `--force` option does not grant access to files owned by other users on any system.
 
