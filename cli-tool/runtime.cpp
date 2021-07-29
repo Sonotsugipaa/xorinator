@@ -31,8 +31,6 @@
 	}
 #endif
 
-#include <xorinator.hpp>
-
 #include "runtime.hpp"
 
 using xorinator::cli::CommandLine;
@@ -47,7 +45,8 @@ using RngKey = xorinator::RngKey<512>;
 
 namespace {
 
-	constexpr unsigned RNG_RESET_AFTER = 512; // Reset a RNG after X bytes
+	/** Reset a RngAdapter instance after RNG_RESET_AFTER bytes. */
+	constexpr size_t RNG_RESET_AFTER = 4096 * sizeof(std::random_device::result_type);
 
 
 	#ifdef XORINATOR_UNIX_PERM_CHECK
@@ -58,6 +57,34 @@ namespace {
 		template<> std::string_view rwxString<01> = "execute";
 		template<> std::string_view rwxString<02> = "write";
 		template<> std::string_view rwxString<04> = "read";
+
+		bool processHasGroup(gid_t fGid) {
+			constexpr auto allocGroups = [](size_t size) {
+				return reinterpret_cast<gid_t*>(operator new[](size * sizeof(gid_t)));
+			};
+			size_t bufferSize = 16;
+			gid_t* groups = allocGroups(bufferSize);
+			auto groupn = ::getgroups(bufferSize, groups);
+			while(errno != 0) {
+				assert(errno == EINVAL);
+				assert(bufferSize <= (NGROUPS_MAX / 2));
+				errno = 0;
+				operator delete[](groups);
+				bufferSize *= 2;
+				groups = allocGroups(bufferSize);
+				groupn = ::getgroups(bufferSize, groups);
+			}
+			#ifndef NDEBUG
+				/* Apparently the documentation for ::getgroups doesn't specify
+				 * whether the group IDs are ordered, but anecdotal evidence
+				 * suggests so. */
+				assert(groupn >= 0); // A negative value would not make any sense at this point
+				for(decltype(groupn) i=1; i < groupn; ++i)  assert(groups[i-1] <= groups[i]);
+			#endif
+			bool r = std::binary_search(groups, groups + groupn, fGid);
+			operator delete[](groups);
+			return r;
+		}
 
 		template<mode_t rwxBit>
 		void checkFilePermission(const std::string& path) {
@@ -74,14 +101,16 @@ namespace {
 				}
 				uid_t prUid = geteuid();
 				gid_t prGid = getegid();
-				mode_t offset = 6;
-				if(statResult.st_uid != prUid) {
-					if(statResult.st_gid == prGid)
-						offset = 3;
-					else
-						offset = 0;
+				mode_t perm;
+				if(statResult.st_uid == prUid) {
+					perm = (statResult.st_mode >> 6) & 0007;
+				} else
+				if((statResult.st_gid == prGid) || (processHasGroup(statResult.st_gid))) {
+					perm = (statResult.st_mode >> 3) & 0007;
+				} else {
+					perm = statResult.st_mode & 0007;
 				}
-				if(! (statResult.st_mode & (rwxBit << offset))) {
+				if(! (perm & rwxBit)) {
 					throw xorinator::runtime::FilePermissionException(
 						"user doesn't have " + std::string(rwxString<rwxBit>) +
 						" permissions for \"" + path + '"');
@@ -201,14 +230,28 @@ namespace {
 			return r;
 		}
 
-	public:
-		static std::random_device mkRandomDevice() {
-			return std::random_device();
+		Rng initRng_() {
+			constexpr size_t seedSizeBytes = 64;
+			constexpr size_t seedSizeDtype = seedSizeBytes / sizeof(dtype);
+			static_assert(seedSizeDtype % sizeof(dtype) == 0);
+			std::array<dtype, seedSizeDtype> seedData;
+			for(auto& drnd : seedData)  drnd = rndDev_();
+			auto seedSeq = std::seed_seq(seedData.begin(), seedData.end());
+			return Rng(seedSeq);
 		}
 
+		static std::random_device mkRandomDevice_() {
+			#ifdef XORINATOR_DEV_RANDOM
+				return std::random_device("/dev/random");
+			#else
+				return std::random_device();
+			#endif
+		}
+
+	public:
 		RngAdapter():
-				rndDev_(),
-				rng_(rndDev_()),
+				rndDev_(mkRandomDevice_()),
+				rng_(initRng_()),
 				rngState_(rng_()),
 				rngStateByteIndex_(0),
 				rndDevByteIndex_(0),
@@ -259,6 +302,20 @@ namespace {
 			word = rng();
 		}
 		return RngKey(key);
+	}
+
+
+	/** If the command line contains `--key` arguments, warn the user
+	 * that they are deprecated. */
+	void tryWarnRngKeyDeprecated(const CommandLine& cmdln) {
+		if(
+				(! cmdln.options & xorinator::cli::OptionBits::eQuiet) &&
+				(! cmdln.rngKeys.empty())
+		) {
+			std::cerr <<
+				"Warning: \"--key\" arguments are unsafe AND deprecated;"
+				" using them is discouraged.\n" << std::flush;
+		}
 	}
 
 
@@ -321,6 +378,7 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eMultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
+		tryWarnRngKeyDeprecated(cmdln);
 
 		auto rndDev = std::random_device();
 		auto muxIn = InputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
@@ -396,6 +454,7 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eDemultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
+		tryWarnRngKeyDeprecated(cmdln);
 
 		auto demuxOut = OutputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
 		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size());

@@ -6,6 +6,11 @@ if(UNIX)
 	target_compile_definitions(xor-runtime PRIVATE XORINATOR_UNIX_PERM_CHECK)
 endif()
 
+# Define a macro that indicates the existence of /dev/random
+if(EXISTS "/dev/random")
+	target_compile_definitions(xor-runtime PRIVATE XORINATOR_DEV_RANDOM)
+endif()
+
 add_executable(xor main.cpp)
 target_link_libraries(xor clparser xor-runtime)
 
