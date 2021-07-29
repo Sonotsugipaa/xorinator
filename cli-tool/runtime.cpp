@@ -80,7 +80,8 @@ namespace {
 				/* Apparently the documentation for ::getgroups doesn't specify
 				 * whether the group IDs are ordered, but anecdotal evidence
 				 * suggests so. */
-				for(size_t i=1; i < groupn; ++i)  assert(groups[i-1] <= groups[i]);
+				assert(groupn >= 0); // A negative value would not make any sense at this point
+				for(decltype(groupn) i=1; i < groupn; ++i)  assert(groups[i-1] <= groups[i]);
 			#endif
 			bool r = std::binary_search(groups, groups + groupn, fGid);
 			operator delete[](groups);
@@ -232,7 +233,7 @@ namespace {
 		}
 
 		Rng initRng_() {
-			constexpr size_t seedSizeBytes = 32;
+			constexpr size_t seedSizeBytes = 64;
 			constexpr size_t seedSizeDtype = seedSizeBytes / sizeof(dtype);
 			static_assert(seedSizeDtype % sizeof(dtype) == 0);
 			std::array<dtype, seedSizeDtype> seedData;
@@ -242,7 +243,11 @@ namespace {
 		}
 
 		static std::random_device mkRandomDevice_() {
-			return std::random_device();
+			#ifdef XORINATOR_DEV_RANDOM
+				return std::random_device("/dev/random");
+			#else
+				return std::random_device();
+			#endif
 		}
 
 	public:
