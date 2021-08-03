@@ -24,10 +24,8 @@ function run_all_tests {
 	done
 }
 
-_tmp="$(mktemp -p '' xorinator_tests.XXXXX)"
+_tmp="$(mktemp --tmpdir xorinator-tests.XXXXX)"
 run_all_tests "$_tmp"
 _error="$(cat "$_tmp")"
+rm -rf "$_tmp"
 [ -n "$_error" ] && exit 1
-unset _error
-unset _tmp
-unset _dirname
