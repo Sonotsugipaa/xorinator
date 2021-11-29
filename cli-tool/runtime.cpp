@@ -309,7 +309,7 @@ namespace {
 	 * that they are deprecated. */
 	void tryWarnRngKeyDeprecated(const CommandLine& cmdln) {
 		if(
-				(! cmdln.options & xorinator::cli::OptionBits::eQuiet) &&
+				(! (cmdln.options & xorinator::cli::OptionBits::eQuiet)) &&
 				(! cmdln.rngKeys.empty())
 		) {
 			std::cerr <<

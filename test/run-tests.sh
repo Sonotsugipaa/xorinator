@@ -13,19 +13,17 @@ function run_test {
 		echo $'\n'"^^^   \"$_file_pretty\""$': \033[1;33mOK\033[m   ^^^\n'
 	else
 		echo $'\n'"^^^   \"$_file_pretty\""$': \033[1;31mFailure\033[m   ^^^\n'
-		echo 1 >"$2"
+		return 1
 	fi
 }
 
 function run_all_tests {
 	local _file
-	find tests/ -maxdepth 1 -executable -name 'UnitTest-*' | while read _file; do
-		run_test "$_file" "$1"
-	done
+	while read _file; do
+		run_test "$_file"
+	done < <(find tests/ -maxdepth 1 -executable -name 'UnitTest-*')
 }
 
-_tmp="$(mktemp --tmpdir xorinator-tests.XXXXX)"
-run_all_tests "$_tmp"
-_error="$(cat "$_tmp")"
-rm -rf "$_tmp"
-[ -n "$_error" ] && exit 1
+if run_all_tests; then true; else
+	exit 1
+fi
