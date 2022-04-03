@@ -91,6 +91,20 @@ When performing multiplexing operations, the "`--litter NUM`" option causes up t
 This is useful to hide the fact that all one-time pads have the same size as the original message.  
 After a demultiplexing operation, the reconstructed message will be as big as the smallest input.
 
+#### `--nogen FILE_IN`
+
+When performing multiplexing operations, generate output files so that demultiplexing them along with `FILE_IN` will return the same file; `FILE_IN` will not be modified.
+
+Due to how demultiplexing works, `FILE_IN` is assumed to have a bigger or equal size compared to the input file.  
+If that assumption fails, the missing characters are generated using a linear congruential engine seeded with the previously read characters.
+
+``` bash
+#!/bin/bash
+# The output of this script should be "Hello"
+xor mux <(echo Hello) --nogen <(echo 12345) hello.xor
+xor dmx - <(echo 12345) hello.xor
+```
+
 ### Examples
 
 ```bash

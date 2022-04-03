@@ -39,6 +39,7 @@ namespace {
 
 	const std::string srcPath = "deterministic-msg.txt";
 	const std::string srcCpPath = "deterministic-msg.demux.txt";
+	const std::string otpNoGenPath = "run-tests.sh";
 	const std::string otpDstPath0 = "deterministic-msg.1.xor";
 	const std::string otpDstPath1 = "deterministic-msg.2.xor";
 	const std::string message = "rcompat\n";
@@ -236,15 +237,16 @@ namespace {
 
 	/** Expect a file to be multiplexed, then demultiplexed,
 	 * finally ending up with an exact copy of itself. */
-	template<size_t litter>
+	template<size_t litter, bool nogen>
 	utest::ResultType test_mux_demux(std::ostream& os) {
 		using xorinator::cli::CommandLine;
 		try {
 			{ // Create the file
 				if(! mkFile(os, srcPath, message))  return utest::ResultType::eNeutral;
 			} { // Run the multiplex subcommand
+				const std::string& firstOtp = (nogen? ("-G"+otpNoGenPath) : otpDstPath0);
 				if constexpr(litter == 0) {
-					std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), firstOtp.c_str(), otpDstPath1.c_str() };
 					if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 						return eFailure;
 					}
@@ -256,7 +258,8 @@ namespace {
 					}
 				}
 			} { // Run the demultiplex subcommand
-				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				const std::string& firstOtp = (nogen? otpNoGenPath : otpDstPath0);
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), firstOtp.c_str(), otpDstPath1.c_str() };
 				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
@@ -312,7 +315,8 @@ int main(int, char**) {
 		.run("Not enough outputs (demux)", test_not_enough_pads<false>)
 		.run("No output (mux)", test_no_pad<true>)
 		.run("No output (demux)", test_no_pad<false>)
-		.run("Mux & demux", test_mux_demux<0>)
-		.run("Mux & demux (--litter=64)", test_mux_demux<64>);
+		.run("Mux & demux", test_mux_demux<0, false>)
+		.run("Mux & demux (--litter=64)", test_mux_demux<64, false>)
+		.run("Mux & demux (nogen)", test_mux_demux<0, true>);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

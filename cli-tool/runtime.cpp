@@ -40,6 +40,7 @@ using xorinator::StaticVector;
 
 using Rng = std::mt19937_64;
 using RngKey = xorinator::RngKey<512>;
+using StreamKey = xorinator::StreamKey;
 
 
 
@@ -309,7 +310,7 @@ namespace {
 	 * that they are deprecated. */
 	void tryWarnRngKeyDeprecated(const CommandLine& cmdln) {
 		if(
-				(! cmdln.options & xorinator::cli::OptionBits::eQuiet) &&
+				(! (cmdln.options & xorinator::cli::OptionBits::eQuiet)) &&
 				(! cmdln.rngKeys.empty())
 		) {
 			std::cerr <<
@@ -323,8 +324,13 @@ namespace {
 	void checkArgumentUsage(const CommandLine& cmdln) {
 		static constexpr std::string_view pre = "Warning: ";
 		if(cmdln.options & xorinator::cli::OptionBits::eQuiet) return;
-		if((cmdln.cmdType != CmdType::eMultiplex) && (cmdln.litterSize != 0)) {
-			std::cerr << pre << "the \"--litter\" argument has no effect for this subcommand." << std::endl;
+		if(cmdln.cmdType == CmdType::eDemultiplex) {
+			if(cmdln.litterSize != 0) {
+				std::cerr << pre << "the \"--litter\" argument has no effect for this subcommand." << std::endl;
+			} else
+			if(! cmdln.roKeys.empty()) {
+				std::cerr << pre << "\"--nogen\" arguments are redundant for this subcommand." << std::endl;
+			}
 		}
 	}
 
@@ -334,7 +340,7 @@ namespace {
 		using CmdlnException = xorinator::cli::InvalidCommandLineException;
 		if(cmdln.firstArg.empty())
 			throw CmdlnException("invalid file \"\"");
-		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() < 2) {
+		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() + cmdln.roKeys.size() < 2) {
 			if(cmdln.cmdType == CmdType::eMultiplex)
 				throw CmdlnException("a multiplexing operation needs two or more keys");
 			if(cmdln.cmdType == CmdType::eDemultiplex)
@@ -387,6 +393,10 @@ namespace xorinator::runtime {
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
 		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
+		auto roKeyStreams = StaticVector<std::ifstream>(cmdln.roKeys.size());
+		auto roKeys = StaticVector<::StreamKey>(cmdln.roKeys.size());
+		auto roKeyViews = StaticVector<::StreamKey::View>(roKeys.size());
+		auto roKeyIterators = StaticVector<::StreamKey::View::Iterator>(roKeyViews.size());
 		RngAdapter rng;
 
 		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
@@ -394,6 +404,14 @@ namespace xorinator::runtime {
 			rngKeyViews[i] = rngKeys[i].view(0);
 			rngKeyIterators[i].~Iterator(); // Much like Thanos, this is inevitable. Hopefully this can and does get optimized away.
 			new (&rngKeyIterators[i]) ::RngKey::View::Iterator(rngKeyViews[i].begin());
+			++i;
+		}
+		for(size_t i=0; const std::string& key : cmdln.roKeys) {
+			roKeyStreams[i] = std::ifstream(key);
+			roKeys[i] = ::StreamKey(roKeyStreams[i]);
+			roKeyViews[i] = roKeys[i].view(0);
+			roKeyIterators[i].~Iterator(); // Much like Thanos, this is inevitable. Hopefully this can and does get optimized away.
+			new (&roKeyIterators[i]) ::StreamKey::View::Iterator(roKeyViews[i].begin());
 			++i;
 		}
 
@@ -415,9 +433,13 @@ namespace xorinator::runtime {
 				xorSum = xorSum ^ *keyIter;
 				++keyIter;
 			}
+			for(auto& keyIter : roKeyIterators) {
+				xorSum = xorSum ^ *keyIter;
+				++keyIter;
+			}
 			outputBuffer[0] = byte_t(inputChar) ^ xorSum;
 			for(size_t i=0; auto& output : muxOut) {
-				output.get().put(outputBuffer[i++]); }
+				output.get().put(outputBuffer[i++]); } // SEE IF `++i` WORKS INSTEAD OF `i++`
 		}
 
 		if(cmdln.litterSize > 0) {
@@ -457,7 +479,7 @@ namespace xorinator::runtime {
 		tryWarnRngKeyDeprecated(cmdln);
 
 		auto demuxOut = OutputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
-		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size());
+		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size() + cmdln.roKeys.size());
 		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
 		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
 		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
@@ -474,6 +496,11 @@ namespace xorinator::runtime {
 		demuxOut.get().exceptions(std::ios_base::badbit);
 		for(size_t i=0; const std::string& path : cmdln.variadicArgs) {
 			demuxIn[i] = InputStreamAdapter(path, cmdln.firstLiteralArg <= (i+1));
+			demuxIn[i].get().exceptions(std::ios_base::badbit);
+			++i;
+		}
+		for(size_t i = cmdln.variadicArgs.size(); const std::string& path : cmdln.roKeys) {
+			demuxIn[i] = InputStreamAdapter(path, true);
 			demuxIn[i].get().exceptions(std::ios_base::badbit);
 			++i;
 		}
@@ -530,6 +557,7 @@ namespace xorinator::runtime {
 			<< "   -q | --quiet  (suppress error messages)\n"
 			<< "   -f | --force  (skip permission checks)\n"
 			<< "   -g NUM | --litter NUM  (add red herring bytes when generating one-time pads)\n"
+			<< "   -G FILE_IN | --nogen FILE_IN  (treat FILE_IN as an already generated one-time pad)\n"
 			<< '\n'
 			<< "Aliases for \"multiplex\": mux, m\n"
 			<< "Aliases for \"demultiplex\": demux, dmx, d" << std::endl;
