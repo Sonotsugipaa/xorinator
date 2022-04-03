@@ -151,6 +151,100 @@ namespace xorinator {
 			return View(words, begin, begin); }
 	};
 
+
+	class StreamKey {
+	public:
+		std::istream* source;
+
+		inline StreamKey():
+				source(nullptr)
+		{ }
+
+		inline explicit StreamKey(std::istream& source):
+				source(&source)
+		{ }
+
+		class View {
+			friend StreamKey;
+		private:
+			decltype(StreamKey::source) source_;
+			size_t beg_;
+			size_t end_;
+
+			inline View(const decltype(StreamKey::source) source, size_t begin, size_t end):
+					source_(source),
+					beg_(begin),
+					end_(end)
+			{ }
+
+		public:
+			inline View(): source_(nullptr), end_(0) { }
+
+			class Iterator {
+			private:
+				decltype(StreamKey::source) source_;
+				std::minstd_rand eofRng_;
+				byte_t byteAtCursor_;
+				bool fetchOnDeref_;
+
+				void fetch_() {
+					char c;
+					if(! source_->eof()) [[unlikely]] {
+						source_->get(c);
+						eofRng_.seed(eofRng_() ^ (
+							std::minstd_rand::result_type(1) +
+							std::minstd_rand::result_type(c) ));
+					} else {
+						c = eofRng_();
+					}
+					byteAtCursor_ = c;
+				}
+
+			public:
+				inline Iterator():
+						source_(nullptr),
+						eofRng_(std::minstd_rand::default_seed),
+						byteAtCursor_(0 /* unimportant */),
+						fetchOnDeref_(false)
+				{ }
+
+				inline Iterator(const decltype(StreamKey::source) source):
+					source_(source),
+					eofRng_(std::minstd_rand::default_seed),
+					byteAtCursor_(1 /* unimportant */),
+					fetchOnDeref_(true)
+				{ }
+
+				inline Iterator& operator++() {
+					fetch_();
+					return *this;
+				}
+
+				byte_t operator*() {
+					if(fetchOnDeref_) [[unlikely]] {
+						fetch_();
+						fetchOnDeref_ = false;
+					}
+					return byteAtCursor_;
+				}
+			};
+
+			const Iterator begin() const {
+				return Iterator(source_);
+			}
+
+			inline const Iterator end() const { return Iterator(source_); }
+		};
+
+		inline const View view(size_t begin, size_t end) const {
+			return View(source, begin, end); }
+
+		/** Constructs a StreamKey view with the maximum possible size:
+		 * it can be used when the key has an unknown length. */
+		inline const View view(size_t begin) const {
+			return View(source, begin, std::numeric_limits<size_t>::max()); }
+	};
+
 }
 
 

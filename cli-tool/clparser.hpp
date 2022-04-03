@@ -156,6 +156,8 @@ namespace xorinator::cli {
 		StaticVector<std::string> variadicArgs;
 		/** A list of "--key" options. */
 		StaticVector<std::string> rngKeys;
+		/** A list of "--nogen" options. */
+		StaticVector<std::string> roKeys;
 		/** Maximum amount of random surplus data written by multiplexing operations. */
 		size_t litterSize;
 		/** First argument that follows the literal argument marker (`--`).
