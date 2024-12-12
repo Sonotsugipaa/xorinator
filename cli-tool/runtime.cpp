@@ -21,15 +21,9 @@
 #include <iostream>
 #include <random>
 #include <cassert>
+#include <concepts>
+#include <array>
 #include <unordered_set>
-
-#ifdef XORINATOR_UNIX_PERM_CHECK
-	#include <cerrno>
-	extern "C" {
-		#include <sys/stat.h>
-		#include <unistd.h>
-	}
-#endif
 
 #include "runtime.hpp"
 
@@ -48,85 +42,6 @@ namespace {
 
 	/** Reset a RngAdapter instance after RNG_RESET_AFTER bytes. */
 	constexpr size_t RNG_RESET_AFTER = 4096 * sizeof(std::random_device::result_type);
-
-
-	#ifdef XORINATOR_UNIX_PERM_CHECK
-
-		template<mode_t rwxBit>
-		std::string_view rwxString;
-
-		template<> std::string_view rwxString<01> = "execute";
-		template<> std::string_view rwxString<02> = "write";
-		template<> std::string_view rwxString<04> = "read";
-
-		bool processHasGroup(gid_t fGid) {
-			constexpr auto allocGroups = [](size_t size) {
-				return reinterpret_cast<gid_t*>(operator new[](size * sizeof(gid_t)));
-			};
-			size_t bufferSize = 16;
-			gid_t* groups = allocGroups(bufferSize);
-			auto groupn = ::getgroups(bufferSize, groups);
-			while(errno != 0) {
-				assert(errno == EINVAL);
-				assert(bufferSize <= (NGROUPS_MAX / 2));
-				errno = 0;
-				operator delete[](groups);
-				bufferSize *= 2;
-				groups = allocGroups(bufferSize);
-				groupn = ::getgroups(bufferSize, groups);
-			}
-			#ifndef NDEBUG
-				/* Apparently the documentation for ::getgroups doesn't specify
-				 * whether the group IDs are ordered, but anecdotal evidence
-				 * suggests so. */
-				assert(groupn >= 0); // A negative value would not make any sense at this point
-				for(decltype(groupn) i=1; i < groupn; ++i)  assert(groups[i-1] <= groups[i]);
-			#endif
-			bool r = std::binary_search(groups, groups + groupn, fGid);
-			operator delete[](groups);
-			return r;
-		}
-
-		template<mode_t rwxBit>
-		void checkFilePermission(const std::string& path) {
-			static_assert(S_IRUSR == 0400);
-			static_assert(S_IRGRP == 0040);
-			static_assert(S_IROTH == 0004);
-			static_assert((rwxBit == 01) || (rwxBit == 02) | (rwxBit == 04));
-			if(path == "-") return; // This may need to be removed in the future, but for now every file named "-" is stdin/stdout
-			struct stat statResult;
-			if(0 == stat(path.c_str(), &statResult)) {
-				if(S_ISDIR(statResult.st_mode)) {
-					throw xorinator::runtime::FilePermissionException(
-						'"'+path+"\" is an existing directory");
-				}
-				uid_t prUid = geteuid();
-				gid_t prGid = getegid();
-				mode_t perm;
-				if(statResult.st_uid == prUid) {
-					perm = (statResult.st_mode >> 6) & 0007;
-				} else
-				if((statResult.st_gid == prGid) || (processHasGroup(statResult.st_gid))) {
-					perm = (statResult.st_mode >> 3) & 0007;
-				} else {
-					perm = statResult.st_mode & 0007;
-				}
-				if(! (perm & rwxBit)) {
-					throw xorinator::runtime::FilePermissionException(
-						"user doesn't have " + std::string(rwxString<rwxBit>) +
-						" permissions for \"" + path + '"');
-				}
-			} else {
-				switch(errno) {
-					case ENOENT:  return;
-					default:
-						throw xorinator::runtime::FilePermissionException(
-							"could not determine permissions for file \""+path+'"');
-				}
-			}
-		}
-
-	#endif
 
 
 	/** A std::ifstream / std::ofstream wrapper, that replaces the stream when
@@ -373,14 +288,6 @@ namespace xorinator::runtime {
 	bool runMux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
 
-		#ifdef XORINATOR_UNIX_PERM_CHECK
-			if(! (cmdln.options & cli::OptionBits::eForce)) {
-				checkFilePermission<04>(cmdln.firstArg);
-				for(const auto& file : cmdln.variadicArgs) {
-					checkFilePermission<02>(file); }
-			}
-		#endif
-
 		assert(cmdln.cmdType == cli::CmdType::eMultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
@@ -464,14 +371,6 @@ namespace xorinator::runtime {
 
 	bool runDemux(const CommandLine& cmdln) {
 		using xorinator::byte_t;
-
-		#ifdef XORINATOR_UNIX_PERM_CHECK
-			if(! (cmdln.options & cli::OptionBits::eForce)) {
-				checkFilePermission<02>(cmdln.firstArg);
-				for(const auto& file : cmdln.variadicArgs) {
-					checkFilePermission<04>(file); }
-			}
-		#endif
 
 		assert(cmdln.cmdType == cli::CmdType::eDemultiplex);
 		checkPaths(cmdln);

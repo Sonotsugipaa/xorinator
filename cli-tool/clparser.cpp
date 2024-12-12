@@ -125,13 +125,13 @@ namespace {
 		using xorinator::cli::OptionBits;
 		if((argvxx[cursor].size() < 3) || (! argvxx[cursor].starts_with("--"))) return false;
 		std::optional<std::string> optValue;
-		if(optValue = get_long_option_value("--key", argvxx, cursor)) {
+		if((optValue = get_long_option_value("--key", argvxx, cursor))) {
 			rngKeysDynV.push_back(optValue.value());
 		} else
-		if(optValue = get_long_option_value("--nogen", argvxx, cursor)) {
+		if((optValue = get_long_option_value("--nogen", argvxx, cursor))) {
 			roKeysDynV.push_back(optValue.value());
 		} else
-		if(optValue = get_long_option_value("--litter", argvxx, cursor)) {
+		if((optValue = get_long_option_value("--litter", argvxx, cursor))) {
 			auto uintValue = parse_uint<size_t>(optValue.value());
 			if(uintValue) {
 				litterSize = uintValue.value();
@@ -173,13 +173,13 @@ namespace {
 			return false;
 		}
 		std::optional<std::string> optValue;
-		if(optValue = get_short_option_value('k', argvxx, cursor)) {
+		if((optValue = get_short_option_value('k', argvxx, cursor))) {
 			rngKeysDynV.push_back(optValue.value());
 		} else
-		if(optValue = get_short_option_value('G', argvxx, cursor)) {
+		if((optValue = get_short_option_value('G', argvxx, cursor))) {
 			roKeysDynV.push_back(optValue.value());
 		} else
-		if(optValue = get_short_option_value('g', argvxx, cursor)) {
+		if((optValue = get_short_option_value('g', argvxx, cursor))) {
 			auto uintValue = parse_uint<size_t>(optValue.value());
 			if(uintValue) {
 				litterSize = uintValue.value();
