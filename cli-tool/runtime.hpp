@@ -21,7 +21,6 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
-#include <stdexcept>
 #include <random>
 
 #include "clparser.hpp"
@@ -37,12 +36,6 @@ namespace xorinator {
 
 
 namespace xorinator::runtime {
-
-	class FilePermissionException : public std::runtime_error {
-	public:
-		using std::runtime_error::runtime_error;
-	};
-
 
 	bool runMux(const cli::CommandLine&);
 

@@ -139,7 +139,7 @@ namespace {
 		try {
 			if constexpr(useLiteral) {
 				constexpr unsigned expect = 1;
-				auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-f", "--", "-f" };
+				auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-q", "--", "-q" };
 				auto cmdln = cli::CommandLine(argv.size(), argv.data());
 				if(cmdln.firstLiteralArg != 1) {
 					os
@@ -148,7 +148,7 @@ namespace {
 					return eFailure;
 				}
 			} else {
-				auto argv = std::array<const char*, 5> { "xor", "mux", "arg0", "-f", "arg" };
+				auto argv = std::array<const char*, 5> { "xor", "mux", "arg0", "-q", "arg" };
 				auto cmdln = cli::CommandLine(argv.size(), argv.data());
 				unsigned expectHigherThan = argv.size();
 				if(cmdln.firstLiteralArg <= expectHigherThan) {
@@ -170,7 +170,7 @@ namespace {
 	auto test_literal_cmd(std::ostream& os) {
 		using namespace xorinator;
 		try {
-			auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-f", "--", "-f" };
+			auto argv = std::array<const char*, 6> { "xor", "mux", "arg0", "-q", "--", "-q" };
 			auto cmdln = cli::CommandLine(argv.size(), argv.data());
 			std::vector<std::string> cmdLnVarargsDynV;
 			cmdLnVarargsDynV.insert(cmdLnVarargsDynV.begin(), cmdln.variadicArgs.begin(), cmdln.variadicArgs.end());
@@ -178,10 +178,9 @@ namespace {
 			#define CHECK_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch\n"; success = false; }
 			#define CHECK_PR_(EXPECT_, GOT_, MSG_) if(! (EXPECT_ == GOT_)) { os << MSG_ << " mismatch (expected '" << (EXPECT_) << "', got '" << (GOT_) << "')\n"; success = false; }
 				CHECK_   (cli::CmdType::eMultiplex,           cmdln.cmdType,     "command type");
-				CHECK_   (cli::OptionBits::eForce,            cmdln.options,     "options");
 				CHECK_PR_("xor",                              cmdln.zeroArg,     "zero argument");
 				CHECK_PR_("arg0",                             cmdln.firstArg,    "first argument");
-				CHECK_   (std::vector<std::string> { "-f" },  cmdLnVarargsDynV,  "variadic arguments");
+				CHECK_   (std::vector<std::string> { "-q" },  cmdLnVarargsDynV,  "variadic arguments");
 			#undef CHECK_
 			os << std::flush;
 			return success? eSuccess : eFailure;
@@ -192,11 +191,10 @@ namespace {
 	}
 
 
-	const auto cmdLines = std::array<DynArgv, 7> {
+	const auto cmdLines = std::array<DynArgv, 6> {
 		DynArgv { "xor", "dmx", "in.txt", "out.1.txt", "out.2.txt", "-q" },
-		DynArgv { "xor", "dmx", "-fq"},
 		DynArgv { "xor", "mux", "--invalid-option" },
-		DynArgv { "xor", "mux", "-fqinvald" },
+		DynArgv { "xor", "mux", "-qinvald" },
 		DynArgv { "xor", "mux" },
 		DynArgv { "xor", "invalid subcommand" },
 		DynArgv { "xor" } };
@@ -209,22 +207,19 @@ int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	constexpr static auto optNone = xorinator::cli::OptionBits::eNone;
 	constexpr static auto optQuiet = xorinator::cli::OptionBits::eQuiet;
-	constexpr static auto optForce = xorinator::cli::OptionBits::eForce;
 	batch
 		.run("Command with literal argument marker (syntax)", test_literal_cmd)
 		.run("Command with literal argument marker (first argument)", test_literal_pos<true>)
 		.run("Command with literal argument marker (absent)", test_literal_pos<false>)
 		.run("Multiple arguments, -q option", mk_test_cmdln(cmdLines[0],
 			"xor", CmdType::eDemultiplex, "in.txt", { "out.1.txt", "out.2.txt" }, optQuiet))
-		.run("No argument, conflated -q and -f options", mk_test_cmdln(cmdLines[1],
-			"xor", CmdType::eDemultiplex, { }, { }, optQuiet | optForce))
-		.run("No argument, long invalid option (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
-		.run("No argument, multiple invalid conflated options (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[3]))
-		.run("No argument nor option", mk_test_cmdln(cmdLines[4],
+		.run("No argument, long invalid option (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[1]))
+		.run("No argument, multiple invalid conflated options (fail)", mk_test_cmdln_except<xorinator::cli::InvalidCommandLineException>(cmdLines[2]))
+		.run("No argument nor option", mk_test_cmdln(cmdLines[3],
 			"xor", CmdType::eMultiplex, "", { }, optNone))
-		.run("Unrecognized subcommand", mk_test_cmdln(cmdLines[5],
+		.run("Unrecognized subcommand", mk_test_cmdln(cmdLines[4],
 			"xor", CmdType::eError, "", { }, optNone))
-		.run("Nothing", mk_test_cmdln(cmdLines[6],
+		.run("Nothing", mk_test_cmdln(cmdLines[5],
 			"xor", CmdType::eNone, "", { }, optNone));
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

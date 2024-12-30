@@ -138,9 +138,6 @@ namespace {
 		} else
 		if(argvxx[cursor] == "--quiet") {
 			options = options | OptionBits::eQuiet;
-		} else
-		if(argvxx[cursor] == "--force") {
-			options = options | OptionBits::eForce;
 		} else {
 			throw xorinator::cli::InvalidCommandLineException(
 				"unrecognized option \"" + std::string(argvxx[cursor]) + '"');
@@ -183,9 +180,6 @@ namespace {
 		for(char option : std::string_view(argvxx[cursor].begin() + 1, argvxx[cursor].end())) {
 			if(option == 'q') {
 				options = options | OptionBits::eQuiet;
-			} else
-			if(option == 'f') {
-				options = options | OptionBits::eForce;
 			} else {
 				throw xorinator::cli::InvalidCommandLineException(
 					"unrecognized option \"" + std::string(argvxx[cursor]) + '"');

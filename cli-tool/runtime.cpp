@@ -191,15 +191,15 @@ namespace {
 			if(cmdln.cmdType == CmdType::eDemultiplex)
 				throw CmdlnException("a demultiplexing operation needs two or more keys");
 		}
-		if(cmdln.variadicArgs.empty()) {
-			if(cmdln.cmdType == CmdType::eMultiplex)
+		if(cmdln.cmdType == CmdType::eMultiplex) {
+			if(cmdln.variadicArgs.empty())
 				throw CmdlnException("a multiplexing operation needs one or more output files");
-			if(cmdln.cmdType == CmdType::eDemultiplex)
+		}
+		else if(cmdln.cmdType == CmdType::eMultiplex) {
+			if(cmdln.variadicArgs.size() + cmdln.roKeys.size())
 				throw CmdlnException("a demultiplexing operation needs one or more input files");
 		}
-		if((! (cmdln.options & xorinator::cli::OptionBits::eForce)) && (
-				(cmdln.cmdType == CmdType::eMultiplex) || (cmdln.cmdType == CmdType::eDemultiplex)
-		)) {
+		if((cmdln.cmdType == CmdType::eMultiplex) || (cmdln.cmdType == CmdType::eDemultiplex)) {
 			auto paths = std::unordered_set<std::string>(cmdln.variadicArgs.size());
 			paths.insert(cmdln.firstArg);
 			for(size_t i=0; i < cmdln.variadicArgs.size(); ++i) {
@@ -362,9 +362,7 @@ namespace xorinator::runtime {
 			<< "   " << zeroArg << " help | ?\n"
 			<< '\n'
 			<< "Options:\n"
-			<< "   -k PASSPHRASE | --key PASSPHRASE  (add a RNG as a one-time pad)\n"
 			<< "   -q | --quiet  (suppress error messages)\n"
-			<< "   -f | --force  (skip permission checks)\n"
 			<< "   -g NUM | --litter NUM  (add red herring bytes when generating one-time pads)\n"
 			<< "   -G FILE_IN | --nogen FILE_IN  (treat FILE_IN as an already generated one-time pad)\n"
 			<< '\n'

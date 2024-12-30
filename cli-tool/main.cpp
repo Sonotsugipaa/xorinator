@@ -28,7 +28,6 @@
 int main(int argc, char** argv) {
 	using xorinator::cli::CommandLine;
 	using xorinator::cli::InvalidCommandLineException;
-	using xorinator::runtime::FilePermissionException;
 	#define IF_QUIET if(! (cmdln.options & xorinator::cli::OptionBits::eQuiet))
 	#define PRINT_EX(EX_) "[" #EX_ "] " << ex.what() << '.'
 	#define CATCH_EX(EX_) catch(EX_& ex) { \
@@ -39,12 +38,6 @@ int main(int argc, char** argv) {
 	try {
 		cmdln = CommandLine(argc, argv);
 		return xorinator::runtime::run(cmdln)? EXIT_SUCCESS : EXIT_FAILURE;
-	}
-	catch(FilePermissionException& ex) {
-		IF_QUIET std::cerr
-			<< PRINT_EX(FilePermissionException)
-			<< "\nYou can skip permission checks with the \"--force\" option."
-			<< std::endl;
 	}
 	CATCH_EX(InvalidCommandLineException)
 	CATCH_EX(std::exception)

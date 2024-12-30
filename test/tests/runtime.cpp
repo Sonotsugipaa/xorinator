@@ -23,6 +23,7 @@
 #include <cli-tool/clparser.hpp>
 #include <cli-tool/runtime.hpp>
 
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -159,7 +160,12 @@ namespace {
 				}
 			}
 		} catch(xorinator::cli::InvalidCommandLineException& ex) {
-			return eSuccess;
+			if constexpr(muxNotDemux)
+			if(0 == strcmp(ex.what(), "a multiplexing operation needs two or more keys")) return eSuccess;
+			if constexpr(! muxNotDemux)
+			if(0 == strcmp(ex.what(), "a demultiplexing operation needs two or more keys")) return eSuccess;
+			os << "Incorrect exception message (" << ex.what() << ')' << std::endl;
+			return eFailure;
 		} catch(std::exception& ex) {
 			os << "std::exception: " << ex.what() << std::endl;
 		} catch(...) {
@@ -203,25 +209,34 @@ namespace {
 		using xorinator::cli::CommandLine;
 		try {
 			if constexpr(muxNotDemux) {
-				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), "-k1234", "-k5678" };
+				std::array<const char*, 5> argv = { "xor", "mux", srcPath.c_str(), "-G1234", "-G5678" };
 				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 					return eFailure;
 				}
 			} else {
-				std::array<const char*, 5> argv = { "xor", "dmx", srcPath.c_str(), "-k1234", "-k5678" };
+				std::array<const char*, 5> argv = { "xor", "dmx", srcPath.c_str(), "-G1234", "-G5678" };
 				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
-					return eFailure;
+					return eSuccess;
 				}
 			}
 		} catch(xorinator::cli::InvalidCommandLineException& ex) {
-			return eSuccess;
+			if constexpr(muxNotDemux)
+			if(0 == strcmp(ex.what(), "a multiplexing operation needs one or more output files")) return eSuccess;
+			if constexpr(! muxNotDemux)
+			if(0 == strcmp(ex.what(), "a demultiplexing operation needs one or more input files")) return eFailure;
+			os << "Incorrect exception message (" << ex.what() << ')' << std::endl;
+			return eFailure;
 		} catch(std::exception& ex) {
 			os << "std::exception: " << ex.what() << std::endl;
 		} catch(...) {
 			os << "An unknown exception was thrown" << std::endl;
 		}
-		os << expectedExceptionMsg << std::endl;
-		return eFailure;
+		if constexpr(muxNotDemux) {
+			os << expectedExceptionMsg << std::endl;
+			return eFailure;
+		} else {
+			return eSuccess;
+		}
 	}
 
 
@@ -329,9 +344,9 @@ int main(int, char**) {
 		.run("Demux consistency", test_pads_demux)
 		.run("Demux with differently sized inputs", test_demux_diff_sizes)
 		.run("Not enough outputs (mux)", test_not_enough_pads<true>)
-		.run("Not enough outputs (demux)", test_not_enough_pads<false>)
+		.run("Not enough inputs (demux)", test_not_enough_pads<false>)
 		.run("No output (mux)", test_no_pad<true>)
-		.run("No output (demux)", test_no_pad<false>)
+		.run("No input (demux)", test_no_pad<false>)
 		.run("Mux & demux", test_mux_demux<0, false>)
 		.run("Mux & demux (--litter=64)", test_mux_demux<64, false>)
 		.run("Mux & demux (nogen)", test_mux_demux<0, true>)
