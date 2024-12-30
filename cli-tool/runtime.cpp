@@ -20,10 +20,12 @@
 
 #include <iostream>
 #include <random>
+#include <cstring>
 #include <cassert>
 #include <concepts>
 #include <array>
 #include <unordered_set>
+#include <bit>
 
 #include "runtime.hpp"
 
@@ -32,16 +34,11 @@ using xorinator::cli::CmdType;
 using xorinator::cli::InvalidCommandLineException;
 using xorinator::StaticVector;
 
-using Rng = std::mt19937_64;
-using RngKey = xorinator::RngKey<512>;
-using StreamKey = xorinator::StreamKey;
-
 
 
 namespace {
 
-	/** Reset a RngAdapter instance after RNG_RESET_AFTER bytes. */
-	constexpr size_t RNG_RESET_AFTER = 4096 * sizeof(std::random_device::result_type);
+	constexpr size_t RNG_BLOCK = 4096 * sizeof(std::random_device::result_type);
 
 
 	/** A std::ifstream / std::ofstream wrapper, that replaces the stream when
@@ -119,120 +116,53 @@ namespace {
 	using OutputStreamAdapter = StreamAdapter<std::ostream, std::ofstream>;
 
 
+	#ifdef XORINATOR_DEV_RANDOM
 	class RngAdapter {
-	private:
-		using rtype = Rng::result_type;
-		using dtype = std::random_device::result_type;
-		using byte_t = xorinator::byte_t;
-		static_assert(0 == sizeof(rtype) % sizeof(byte_t));
-		static constexpr unsigned rtype_bytes = sizeof(rtype) / sizeof(byte_t);
-		static constexpr unsigned dtype_bytes = sizeof(rtype) / sizeof(byte_t);
-
-		std::random_device rndDev_;
-		Rng rng_;
-		rtype rngState_;
-		dtype rndDevState_;
-		unsigned rngStateByteIndex_;
-		unsigned rndDevByteIndex_;
-		unsigned rngByteIndex_;
-
-		dtype fwdDevRandom_() {
-			static constexpr unsigned bits = std::numeric_limits<byte_t>::digits;
-			if(rndDevByteIndex_ >= dtype_bytes) {
-				rndDev_();
-				rndDevByteIndex_ = 0;
-			}
-			auto r = byte_t(rngState_ >> rtype((rndDevByteIndex_++) * bits));
-			return r;
-		}
-
-		Rng initRng_() {
-			constexpr size_t seedSizeBytes = 64;
-			constexpr size_t seedSizeDtype = seedSizeBytes / sizeof(dtype);
-			static_assert(seedSizeDtype % sizeof(dtype) == 0);
-			std::array<dtype, seedSizeDtype> seedData;
-			for(auto& drnd : seedData)  drnd = rndDev_();
-			auto seedSeq = std::seed_seq(seedData.begin(), seedData.end());
-			return Rng(seedSeq);
-		}
-
-		static std::random_device mkRandomDevice_() {
-			#ifdef XORINATOR_DEV_RANDOM
-				return std::random_device("/dev/random");
-			#else
-				return std::random_device();
-			#endif
-		}
-
 	public:
+		using byte_t = xorinator::byte_t;
+
 		RngAdapter():
-				rndDev_(mkRandomDevice_()),
-				rng_(initRng_()),
-				rngState_(rng_()),
-				rngStateByteIndex_(0),
-				rndDevByteIndex_(0),
-				rngByteIndex_(0)
+			byteIndex_(0),
+			bufferSize_(0),
+			byteBuffer_(std::make_unique_for_overwrite<byte_t[]>(RNG_BLOCK)),
+			hwRng_("/dev/random")
 		{ }
 
-		byte_t operator()() {
-			static constexpr unsigned bits = std::numeric_limits<byte_t>::digits;
-			if(rngStateByteIndex_ >= rtype_bytes) {
-				if(rngByteIndex_ >= RNG_RESET_AFTER) {
-					rng_ = Rng(fwdDevRandom_());
-					rngByteIndex_ = 0;
-				}
-				rngState_ = rng_();
-				rngStateByteIndex_ = 0;
+		void fillBufferTo(size_t neededSize) {
+			assert(neededSize <= RNG_BLOCK);
+			if(neededSize > (RNG_BLOCK - bufferSize_ /* available space */)) [[unlikely]] {
+				// Discarding bytes to make space is easier
+				bufferSize_ = 0;
+				byteIndex_ = 0;
 			}
-			auto r = byte_t(rngState_ >> rtype((rngStateByteIndex_++) * bits));
-			++rngByteIndex_;
+			if((bufferSize_ - byteIndex_ /* unused buffered bytes */) < neededSize) [[unlikely]] {
+				if(hwRng_.eof()) [[unlikely]] throw std::runtime_error("failed to get random bytes from the OS: EOF");
+				static_assert(sizeof(char) == sizeof(byte_t), "std::basic_istream<char*> reads chars");
+				auto rdReq = neededSize + byteIndex_ - bufferSize_;
+				hwRng_.read(reinterpret_cast<char*>(byteBuffer_.get()) + bufferSize_, rdReq);
+				auto rd = size_t(hwRng_.gcount());
+				assert(rd == rdReq || hwRng_.eof());
+				bufferSize_ += rd;
+			}
+		}
+
+		template <typename T>
+		T generate() noexcept {
+			fillBufferTo(sizeof(T));
+			T r = { };
+			assert(byteIndex_ + sizeof(T) <= RNG_BLOCK);
+			memcpy(&r, byteBuffer_.get() + byteIndex_, sizeof(T));
+			byteIndex_ += sizeof(T);
 			return r;
 		}
+
+	private:
+		size_t byteIndex_;
+		size_t bufferSize_;
+		std::unique_ptr<xorinator::byte_t[]> byteBuffer_;
+		std::ifstream hwRng_;
 	};
-
-
-	template<typename uint_t>
-	uint_t random(RngAdapter& rng) {
-		using byte_t = xorinator::byte_t;
-		static_assert(std::numeric_limits<uint_t>::is_integer);
-		static_assert(! std::numeric_limits<uint_t>::is_signed);
-		uint_t r = 0;
-		for(unsigned i=0; i < (sizeof(uint_t) / sizeof(byte_t)); ++i) {
-			r = r | (rng() << (i * std::numeric_limits<byte_t>::digits));
-		}
-		return r;
-	}
-
-
-	/** Creates a deterministic number sequence from an arbitrary string,
-	 * by hashing it with a simple algorithm involving xor operations
-	 * and linear congruential RNGs. */
-	RngKey keyFromGenerator(const std::string& gen) {
-		RngKey::word_t hash = 0;
-		std::array<RngKey::word_t, RngKey::word_count> key;
-		for(std::string::size_type i=0; i < gen.size(); ++i) {
-			hash = hash ^ std::minstd_rand(gen[i] ^ i)();
-		}
-		auto rng = std::mt19937(hash);
-		for(RngKey::word_t& word : key) {
-			word = rng();
-		}
-		return RngKey(key);
-	}
-
-
-	/** If the command line contains `--key` arguments, warn the user
-	 * that they are deprecated. */
-	void tryWarnRngKeyDeprecated(const CommandLine& cmdln) {
-		if(
-				(! (cmdln.options & xorinator::cli::OptionBits::eQuiet)) &&
-				(! cmdln.rngKeys.empty())
-		) {
-			std::cerr <<
-				"Warning: \"--key\" arguments are unsafe AND deprecated;"
-				" using them is discouraged.\n" << std::flush;
-		}
-	}
+	#endif
 
 
 	/** Check non-fatal semantic errors. */
@@ -255,7 +185,7 @@ namespace {
 		using CmdlnException = xorinator::cli::InvalidCommandLineException;
 		if(cmdln.firstArg.empty())
 			throw CmdlnException("invalid file \"\"");
-		if(cmdln.variadicArgs.size() + cmdln.rngKeys.size() + cmdln.roKeys.size() < 2) {
+		if(cmdln.variadicArgs.size() + cmdln.roKeys.size() < 2) {
 			if(cmdln.cmdType == CmdType::eMultiplex)
 				throw CmdlnException("a multiplexing operation needs two or more keys");
 			if(cmdln.cmdType == CmdType::eDemultiplex)
@@ -279,6 +209,23 @@ namespace {
 		}
 	}
 
+
+	struct Rd {
+		bool              s/*uccess*/;
+		xorinator::byte_t b/*yte*/;
+	};
+	auto readByte(std::istream& istr) -> Rd {
+		if(! istr) [[unlikely]] return { false, '\0' };
+		char r;
+		istr.read(&r, sizeof(r));
+		if(! istr) return { false, '\0' };
+		// bit_cast, because std::basic_istream seemingly doesn't understand binary files;
+		// keep in mind that `char` and `uint8_t` are EXPLICITLY different types.
+		// On Linux/x86_64, numeric_limits<char   >::digits == 7, while
+		//                  numeric_limits<uint8_t>::digits == 8.
+		return { true, std::bit_cast<xorinator::byte_t>(r) };
+	};
+
 }
 
 
@@ -291,34 +238,16 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eMultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
-		tryWarnRngKeyDeprecated(cmdln);
 
 		auto rndDev = std::random_device();
 		auto muxIn = InputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
-		auto muxOut = StaticVector<OutputStreamAdapter>(cmdln.variadicArgs.size());
+		auto muxOut = std::vector<OutputStreamAdapter>(cmdln.variadicArgs.size());
 		auto outputBuffer = StaticVector<byte_t>(muxOut.size());
-		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
-		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
-		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
 		auto roKeyStreams = StaticVector<std::ifstream>(cmdln.roKeys.size());
-		auto roKeys = StaticVector<::StreamKey>(cmdln.roKeys.size());
-		auto roKeyViews = StaticVector<::StreamKey::View>(roKeys.size());
-		auto roKeyIterators = StaticVector<::StreamKey::View::Iterator>(roKeyViews.size());
 		RngAdapter rng;
 
-		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
-			rngKeys[i] = keyFromGenerator(key);
-			rngKeyViews[i] = rngKeys[i].view(0);
-			rngKeyIterators[i].~Iterator(); // Much like Thanos, this is inevitable. Hopefully this can and does get optimized away.
-			new (&rngKeyIterators[i]) ::RngKey::View::Iterator(rngKeyViews[i].begin());
-			++i;
-		}
 		for(size_t i=0; const std::string& key : cmdln.roKeys) {
 			roKeyStreams[i] = std::ifstream(key);
-			roKeys[i] = ::StreamKey(roKeyStreams[i]);
-			roKeyViews[i] = roKeys[i].view(0);
-			roKeyIterators[i].~Iterator(); // Much like Thanos, this is inevitable. Hopefully this can and does get optimized away.
-			new (&roKeyIterators[i]) ::StreamKey::View::Iterator(roKeyViews[i].begin());
 			++i;
 		}
 
@@ -333,30 +262,28 @@ namespace xorinator::runtime {
 		while(muxIn.get().get(inputChar)) {
 			byte_t xorSum = 0;
 			for(size_t i=1; i < muxOut.size(); ++i) {
-				outputBuffer[i] = random<byte_t>(rng);
+				outputBuffer[i] = rng.generate<byte_t>();
 				xorSum = xorSum ^ outputBuffer[i];
 			}
-			for(auto& keyIter : rngKeyIterators) {
-				xorSum = xorSum ^ *keyIter;
-				++keyIter;
-			}
-			for(auto& keyIter : roKeyIterators) {
-				xorSum = xorSum ^ *keyIter;
-				++keyIter;
+			for(auto& keyIstr : roKeyStreams) {
+				auto rd = readByte(keyIstr);
+				if(rd.s) [[likely]] xorSum = xorSum ^ rd.b;
+				else                goto lbl_stop_multiplexing; // need to break two loops
 			}
 			outputBuffer[0] = byte_t(inputChar) ^ xorSum;
 			for(size_t i=0; auto& output : muxOut) {
-				output.get().put(outputBuffer[i++]); } // SEE IF `++i` WORKS INSTEAD OF `i++`
+				output.get().put(outputBuffer[i++]); }
 		}
+		lbl_stop_multiplexing:
 
 		if(cmdln.litterSize > 0) {
-			size_t noLitterIndex = random<size_t>(rng) % muxOut.size();
+			size_t noLitterIndex = rng.generate<byte_t>() % muxOut.size();
 			for(size_t i=0; auto& output : muxOut) {
 				using lit_t = decltype(cmdln.litterSize);
 				if((i++) != noLitterIndex) {
-					lit_t litterSize = random<lit_t>(rng) % cmdln.litterSize;
+					lit_t litterSize = rng.generate<lit_t>() % cmdln.litterSize;
 					for(lit_t i=0; i < litterSize; ++i) {
-						output.get().put(rng());
+						output.get().put(rng.generate<byte_t>());
 					}
 				}
 			}
@@ -375,22 +302,9 @@ namespace xorinator::runtime {
 		assert(cmdln.cmdType == cli::CmdType::eDemultiplex);
 		checkPaths(cmdln);
 		checkArgumentUsage(cmdln);
-		tryWarnRngKeyDeprecated(cmdln);
 
 		auto demuxOut = OutputStreamAdapter(cmdln.firstArg, cmdln.firstLiteralArg <= 0);
 		auto demuxIn = StaticVector<InputStreamAdapter>(cmdln.variadicArgs.size() + cmdln.roKeys.size());
-		auto rngKeys = StaticVector<::RngKey>(cmdln.rngKeys.size());
-		auto rngKeyViews = StaticVector<::RngKey::View>(rngKeys.size());
-		auto rngKeyIterators = StaticVector<::RngKey::View::Iterator>(rngKeyViews.size());
-
-		for(size_t i=0; const std::string& key : cmdln.rngKeys) {
-			rngKeys[i] = keyFromGenerator(key);
-			rngKeyViews[i] = rngKeys[i].view(0);
-			/* The next line is a bit of a hack: see the similar situation in
-			 * ::runMux. */
-			new (&rngKeyIterators[i]) ::RngKey::View::Iterator(rngKeyViews[i].begin());
-			++i;
-		}
 
 		demuxOut.get().exceptions(std::ios_base::badbit);
 		for(size_t i=0; const std::string& path : cmdln.variadicArgs) {
@@ -413,10 +327,6 @@ namespace xorinator::runtime {
 				} else {
 					return false;
 				}
-			}
-			for(auto& keyIter : rngKeyIterators) {
-				xorSum = xorSum ^ *keyIter;
-				++keyIter;
 			}
 			demuxOut.get().put(xorSum);
 			return true;

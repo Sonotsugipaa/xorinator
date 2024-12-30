@@ -27,6 +27,8 @@
 #include <fstream>
 #include <filesystem>
 #include <array>
+#include <random>
+#include <memory>
 
 
 
@@ -38,6 +40,7 @@ namespace {
 
 
 	const std::string srcPath = "deterministic-msg.txt";
+	const std::string bigSrcPath = "deterministic-big-msg.bin";
 	const std::string srcCpPath = "deterministic-msg.demux.txt";
 	const std::string otpNoGenPath = "run-tests.sh";
 	const std::string otpDstPath0 = "deterministic-msg.1.xor";
@@ -51,6 +54,21 @@ namespace {
 			auto file = std::ofstream(path);
 			file.exceptions(std::ios_base::badbit);
 			file << content;
+			return true;
+		} catch(std::exception& ex) {
+			os << "Could not write to \"" << path << "\": " << ex.what() << std::endl;
+		}
+		return false;
+	};
+
+	bool genFile(std::ostream& os, const std::string& path, size_t size) {
+		auto randomData = std::make_unique_for_overwrite<char[]>(size);
+		std::minstd_rand rng;
+		for(size_t i = 0; i < size; ++i) randomData[i] = rng();
+		try {
+			auto file = std::ofstream(path);
+			file.exceptions(std::ios_base::badbit);
+			file << std::string_view(randomData.get(), size);
 			return true;
 		} catch(std::exception& ex) {
 			os << "Could not write to \"" << path << "\": " << ex.what() << std::endl;
@@ -102,7 +120,9 @@ namespace {
 			file0.seekg(0, std::ios_base::end);
 			file1.seekg(0, std::ios_base::end);
 			if(file0.tellg() != file1.tellg()) {
-				os << "File \"" << pathResult << "\": size mismatch with \"" << pathExpect << '"' << std::endl;
+				os
+				<< "File \"" << pathResult << "\": size mismatch with \"" << pathExpect
+				<< "\" (" << file0.tellg() << " vs " << file1.tellg() << ')' << std::endl;
 				return false;
 			}
 			file0.seekg(0, std::ios_base::beg);
@@ -205,36 +225,6 @@ namespace {
 	}
 
 
-	/** Expect a demultiplexing operation to run successfully and produce the
-	 * correct output when using --key arguments. This test should fail if
-	 * the deterministic algorithm for generating one-time pads from strings
-	 * changes, therefore breaking retrocompatibility, therefore causing
-	 * previously multiplexed files to be lost. */
-	utest::ResultType test_keys_demux(std::ostream& os) {
-		using xorinator::cli::CommandLine;
-		try {
-			{ // Create the files
-				if(! mkFile(os, srcCpPath, message))  return utest::ResultType::eNeutral;
-				if(! mkFile(os, otpDstPath0, "abcdefgh"))  return utest::ResultType::eNeutral;
-			} { // Run the multiplex subcommand
-				std::array<const char*, 6> argv = { "xor", "dmx", "-k1234", "-klaks", srcCpPath.c_str(), otpDstPath0.c_str()};
-				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
-					return eFailure;
-				}
-			} { // Compare the result    a208 7f37 2d29 71de
-				static const std::string hardcodedExpect = {
-					char(0xa2),  char(0x08),  char(0x7f),  char(0x37),
-					char(0x2d),  char(0x29),  char(0x71),  char(0xde) };
-				if(! cmpFile(os, srcCpPath, hardcodedExpect))  return eFailure;
-			}
-		} catch(std::exception& ex) {
-			os << "Exception: " << ex.what() << std::endl;
-			return eFailure;
-		}
-		return eSuccess;
-	}
-
-
 	/** Expect a file to be multiplexed, then demultiplexed,
 	 * finally ending up with an exact copy of itself. */
 	template<size_t litter, bool nogen>
@@ -252,7 +242,7 @@ namespace {
 					}
 				} else {
 					std::string litterArg = "--litter=" + std::to_string(litter);
-					std::array<const char*, 6> argv = { "xor", "mux", litterArg.c_str(), srcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+					std::array<const char*, 6> argv = { "xor", "mux", litterArg.c_str(), srcPath.c_str(), firstOtp.c_str(), otpDstPath1.c_str() };
 					if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
 						return eFailure;
 					}
@@ -265,6 +255,34 @@ namespace {
 				}
 			} { // Compare the files
 				if(! cmpFiles(os, srcPath, srcCpPath))  return eFailure;
+			}
+		} catch(std::exception& ex) {
+			os << "Exception: " << ex.what() << std::endl;
+			return eFailure;
+		}
+		return eSuccess;
+	}
+
+
+	/** Expect a big file to be multiplexed, then demultiplexed,
+	 * finally ending up with an exact copy of itself. */
+	utest::ResultType test_mux_demux_big(std::ostream& os) {
+		using xorinator::cli::CommandLine;
+		try {
+			{ // Create the files
+				if(! genFile(os, bigSrcPath, (4 * 1024 * 1024) - 200))  return utest::ResultType::eNeutral;
+			} { // Run the multiplex subcommand
+				std::array<const char*, 5> argv = { "xor", "mux", bigSrcPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} { // Run the demultiplex subcommand
+				std::array<const char*, 5> argv = { "xor", "dmx", srcCpPath.c_str(), otpDstPath0.c_str(), otpDstPath1.c_str() };
+				if(! xorinator::runtime::run(CommandLine(argv.size(), argv.data()))) {
+					return eFailure;
+				}
+			} { // Compare the files
+				if(! cmpFiles(os, bigSrcPath, srcCpPath))  return eFailure;
 			}
 		} catch(std::exception& ex) {
 			os << "Exception: " << ex.what() << std::endl;
@@ -308,8 +326,7 @@ namespace {
 int main(int, char**) {
 	auto batch = utest::TestBatch(std::cout);
 	batch
-		.run("Demux consistency (for pads)", test_pads_demux)
-		.run("Demux consistency (for keys)", test_keys_demux)
+		.run("Demux consistency", test_pads_demux)
 		.run("Demux with differently sized inputs", test_demux_diff_sizes)
 		.run("Not enough outputs (mux)", test_not_enough_pads<true>)
 		.run("Not enough outputs (demux)", test_not_enough_pads<false>)
@@ -317,6 +334,7 @@ int main(int, char**) {
 		.run("No output (demux)", test_no_pad<false>)
 		.run("Mux & demux", test_mux_demux<0, false>)
 		.run("Mux & demux (--litter=64)", test_mux_demux<64, false>)
-		.run("Mux & demux (nogen)", test_mux_demux<0, true>);
+		.run("Mux & demux (nogen)", test_mux_demux<0, true>)
+		.run("Mux & demux (big file)", test_mux_demux_big);
 	return batch.failures() == 0? EXIT_SUCCESS : EXIT_FAILURE;
 }

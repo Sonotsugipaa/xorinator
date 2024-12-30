@@ -154,8 +154,6 @@ namespace xorinator::cli {
 		std::string firstArg;
 		/** The list of non-option arguments after `firstArg`. */
 		StaticVector<std::string> variadicArgs;
-		/** A list of "--key" options. */
-		StaticVector<std::string> rngKeys;
 		/** A list of "--nogen" options. */
 		StaticVector<std::string> roKeys;
 		/** Maximum amount of random surplus data written by multiplexing operations. */

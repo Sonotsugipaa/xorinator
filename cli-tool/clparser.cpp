@@ -1,4 +1,4 @@
-/* Copyright (c) 2021 Parola Marco
+/* Copyright (c) 2021-2024 Parola Marco
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -117,7 +117,6 @@ namespace {
 	bool check_option_long(
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
-			std::vector<std::string>& rngKeysDynV,
 			std::vector<std::string>& roKeysDynV,
 			xorinator::cli::OptionBits::IntType& options,
 			size_t& litterSize
@@ -125,9 +124,6 @@ namespace {
 		using xorinator::cli::OptionBits;
 		if((argvxx[cursor].size() < 3) || (! argvxx[cursor].starts_with("--"))) return false;
 		std::optional<std::string> optValue;
-		if((optValue = get_long_option_value("--key", argvxx, cursor))) {
-			rngKeysDynV.push_back(optValue.value());
-		} else
 		if((optValue = get_long_option_value("--nogen", argvxx, cursor))) {
 			roKeysDynV.push_back(optValue.value());
 		} else
@@ -160,7 +156,6 @@ namespace {
 	bool check_option_short(
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
-			std::vector<std::string>& rngKeysDynV,
 			std::vector<std::string>& roKeysDynV,
 			xorinator::cli::OptionBits::IntType& options,
 			size_t& litterSize
@@ -173,9 +168,6 @@ namespace {
 			return false;
 		}
 		std::optional<std::string> optValue;
-		if((optValue = get_short_option_value('k', argvxx, cursor))) {
-			rngKeysDynV.push_back(optValue.value());
-		} else
 		if((optValue = get_short_option_value('G', argvxx, cursor))) {
 			roKeysDynV.push_back(optValue.value());
 		} else
@@ -210,14 +202,13 @@ namespace {
 	bool check_option(
 			const xorinator::StaticVector<std::string_view>& argvxx,
 			size_t& cursor,
-			std::vector<std::string>& rngKeysDynV,
 			std::vector<std::string>& roKeysDynV,
 			xorinator::cli::OptionBits::IntType& options,
 			size_t& litterSize
 	) {
 		return
-			check_option_short(argvxx, cursor, rngKeysDynV, roKeysDynV, options, litterSize) ||
-			check_option_long(argvxx, cursor, rngKeysDynV, roKeysDynV, options, litterSize);
+			check_option_short(argvxx, cursor, roKeysDynV, options, litterSize) ||
+			check_option_long(argvxx, cursor, roKeysDynV, options, litterSize);
 	}
 
 
@@ -253,7 +244,6 @@ namespace xorinator::cli {
 	{
 		using namespace std::string_view_literals;
 		auto argvxx = StaticVector<std::string_view>(argc);
-		std::vector<std::string> rngKeysDynV;  rngKeysDynV.reserve(2);
 		std::vector<std::string> roKeysDynV;
 		std::vector<std::string> argsDynV;  argsDynV.reserve(argc);
 
@@ -274,7 +264,7 @@ namespace xorinator::cli {
 						if(argsDynV.size() > 0)  firstLiteralArg = argsDynV.size() - 1;
 						else  firstLiteralArg = 0;
 					}
-					else if(! check_option(argvxx, cursor, rngKeysDynV, roKeysDynV, options, litterSize)) {
+					else if(! check_option(argvxx, cursor, roKeysDynV, options, litterSize)) {
 						/* If ::check_option returns `true`, then `cursor`, `rngKeysDynV`,
 						 * `roKeysDynV` and `cursor` are modified by said function. */
 						argsDynV.push_back(std::string(argvxx[cursor]));
@@ -284,9 +274,7 @@ namespace xorinator::cli {
 			}
 		} { // Move the dynamic vectors' content to the StaticVector members
 			zeroArg = argvxx[0];
-			rngKeys = StaticVector<std::string>(rngKeysDynV.size());
 			roKeys = StaticVector<std::string>(roKeysDynV.size());
-			std::move(rngKeysDynV.begin(), rngKeysDynV.end(), rngKeys.begin());
 			std::move(roKeysDynV.begin(), roKeysDynV.end(), roKeys.begin());
 			// argsDynV:  [0] subcommand,  [1] first arg,  [2] var arg 0,  [3] var arg 1...
 			if(! argsDynV.empty()) {
